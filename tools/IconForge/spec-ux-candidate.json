@@ -1,0 +1,64 @@
+{
+  // UX 评审 + visual 定版后的候选（不覆盖 spec.json，确认后由 engineer 合并）
+  // 关键变化：16/20/24 各一份整数网格，作废"tiny 1.5× 放大"；母版一字未动。
+  // 跑：IconForge.exe render spec-ux-candidate.json
+  // 产出：png-ux/（outputIco 也指向 png-ux/，不会碰 Resources/app.ico）
+  "sizes": [16, 20, 24, 28, 32, 40, 48, 64, 128, 256],
+  "sizeMap": { "16": "tiny16", "20": "tiny20", "24": "tiny24" },
+  "defaultVariant": "master",
+  "outputIco": "png-ux/app-candidate.ico",
+  "outputPngDir": "png-ux",
+  "dumpAscii": [16, 20, 24],
+  "variants": {
+    // 母版：32 及以上。竖杆属于 ≥28px 的细节，16–24 不出现（竖杆在 16px 会填平人字凹口，已实测）
+    "master": {
+      "viewBox": 256,
+      "layers": [
+        {
+          "kind": "roundrect",
+          "x": 16, "y": 16, "w": 224, "h": 224, "r": 48,
+          "gradient": { "from": "#1E232D", "to": "#0C0E12", "angleDeg": 160 }
+        },
+        {
+          "kind": "path",
+          "d": "M128,66 V128 M88,100 L128,140 L168,100",
+          "stroke": 32,
+          "strokeFill": "#FFFFFF"
+        },
+        {
+          "kind": "roundrect",
+          "x": 64, "y": 176, "w": 128, "h": 32, "r": 16,
+          "gradient": { "from": "#FF8CAD", "to": "#F0578A", "angleDeg": 160 }
+        }
+      ]
+    },
+    // 16px：人字收窄到 8px 跨度（高宽比 1.43 → 1.14），包围盒 8.0×7.0 四边全整数；
+    // 尖底 y=10.0 整数；与粉托之间恰 1 行空气（"落下"与"插进去"的分界）
+    "tiny16": {
+      "viewBox": 16,
+      "layers": [
+        { "kind": "roundrect", "x": 1, "y": 1, "w": 14, "h": 14, "r": 3, "fill": "#14171E" },
+        { "kind": "path", "d": "M5,4 L8,9 L11,4", "stroke": 2, "strokeFill": "#FFFFFF" },
+        { "kind": "roundrect", "x": 3, "y": 11, "w": 10, "h": 2, "r": 1, "fill": "#FB7299" }
+      ]
+    },
+    // 20px：125% DPI 托盘。18×18 @(1,1) r4，人字 sw2，托 12×3 @(4,14)
+    "tiny20": {
+      "viewBox": 20,
+      "layers": [
+        { "kind": "roundrect", "x": 1, "y": 1, "w": 18, "h": 18, "r": 4, "fill": "#14171E" },
+        { "kind": "path", "d": "M5.75,5 L10,12 L14.25,5", "stroke": 2, "strokeFill": "#FFFFFF" },
+        { "kind": "roundrect", "x": 4, "y": 14, "w": 12, "h": 3, "r": 1.5, "fill": "#FB7299" }
+      ]
+    },
+    // 24px：150% DPI 托盘（笔记本默认）。22×22 @(1,1) r5，人字 sw3（无竖杆后 V 没有水平/垂直描边边，奇数为整数），托 16×3 @(4,17)
+    "tiny24": {
+      "viewBox": 24,
+      "layers": [
+        { "kind": "roundrect", "x": 1, "y": 1, "w": 22, "h": 22, "r": 5, "fill": "#14171E" },
+        { "kind": "path", "d": "M6.75,5.25 L12,13.5 L17.25,5.25", "stroke": 3, "strokeFill": "#FFFFFF" },
+        { "kind": "roundrect", "x": 4, "y": 17, "w": 16, "h": 3, "r": 1.5, "fill": "#FB7299" }
+      ]
+    }
+  }
+}

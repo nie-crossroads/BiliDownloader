@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="BiliDownloader.Core/BiliDownloader.Core.csproj" />
+  <Project Path="BiliDownloader.Tests/BiliDownloader.Tests.csproj" />
+  <Project Path="BiliDownloader.UI/BiliDownloader.UI.csproj" />
+</Solution>

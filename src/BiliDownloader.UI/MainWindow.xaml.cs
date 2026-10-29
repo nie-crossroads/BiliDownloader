@@ -1,0 +1,161 @@
+﻿using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Interop;
+using BiliDownloader.UI.Services;
+using BiliDownloader.UI.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace BiliDownloader.UI;
+
+public partial class MainWindow : Window
+{
+    private readonly MainViewModel _viewModel;
+    private readonly IServiceProvider _services;
+
+    public MainWindow(MainViewModel viewModel, IServiceProvider services)
+    {
+        InitializeComponent();
+
+        _viewModel = viewModel;
+        _services = services;
+        DataContext = viewModel;
+
+        SourceInitialized += OnSourceInitialized;
+        Loaded += OnLoaded;
+    }
+
+    private void OnSettingsClick(object sender, RoutedEventArgs e)
+    {
+        var settings = _services.GetRequiredService<AppSettings>();
+        var window = new SettingsWindow(new SettingsViewModel(settings, OpenCookieFromSettings))
+        {
+            Owner = this
+        };
+        window.ShowDialog();
+    }
+
+    /// <summary>设置页里的「手动粘贴 Cookie」：先关设置窗口，再回到主窗打开弹层。</summary>
+    private void OpenCookieFromSettings()
+    {
+        foreach (Window window in Application.Current.Windows)
+        {
+            if (window is not SettingsWindow settings) continue;
+            settings.Close();
+            break;
+        }
+
+        _viewModel.ShowCookieCommand.Execute(null);
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        EnsureOnScreen();
+        await _viewModel.InitializeAsync();
+    }
+
+    /// <summary>
+    /// 兜底把窗口拉回主屏。
+    /// WindowStyle=None + WindowStartupLocation=CenterScreen 在某些机器上会算错位置，
+    /// 窗口被丢到屏幕外（实测 Left=-1151，1040 宽的窗口右边界还在 x=-111），启动后
+    /// 用户只看到任务栏图标、点一下窗口才「跳出来」，观感就像它总压在最前面。
+    /// 这里不复用 WPF 的 Left/Top：窗口完全在屏幕外时 WPF 侧算出的值不可靠，
+    /// 直接用 Win32 问系统「这个窗口还落在任何显示器上吗」，不在就挪回主屏居中。
+    /// </summary>
+    private void EnsureOnScreen()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero) return;
+
+        // MONITOR_DEFAULTTONULL：与任何显示器都不相交时返回 NULL。
+        if (MonitorFromWindow(handle, MonitorDefaultToNull) != IntPtr.Zero) return;
+        if (!GetWindowRect(handle, out var rect)) return;
+
+        // 挪回主显示器工作区（不含任务栏）居中。
+        var monitor = MonitorFromWindow(handle, MonitorDefaultToPrimary);
+        var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+        if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref info)) return;
+
+        var width = rect.Right - rect.Left;
+        var height = rect.Bottom - rect.Top;
+        var x = info.Work.Left + (info.Work.Right - info.Work.Left - width) / 2;
+        var y = info.Work.Top + (info.Work.Bottom - info.Work.Top - height) / 2;
+
+        SetWindowPos(handle, IntPtr.Zero, x, y, 0, 0,
+            SwpNoSize | SwpNoZOrder | SwpNoActivate);
+    }
+
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+
+        // Win11 圆角（12px）。系统不支持时静默忽略（视觉规范 §10.5）。
+        try
+        {
+            var preference = 2; // DWMWCP_ROUND
+            DwmSetWindowAttribute(handle, 33, ref preference, sizeof(int));
+        }
+        catch (DllNotFoundException)
+        {
+        }
+        catch (EntryPointNotFoundException)
+        {
+        }
+
+        // 防御：清掉任何外部因素留下的置顶状态。窗口一旦被设成 WS_EX_TOPMOST，
+        // 就会永远压在别的程序上面，点后面的应用也不会被遮挡 —— 这与设计预期相反。
+        SetWindowPos(handle, HwndNotTopmost, 0, 0, 0, 0,
+            SwpNoMove | SwpNoSize | SwpNoActivate);
+    }
+
+    private void OnMinimizeClick(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void OnMaximizeClick(object sender, RoutedEventArgs e) =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    private static readonly IntPtr HwndNotTopmost = new(-2);
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
+    private const uint MonitorDefaultToNull = 0x00000000;
+    private const uint MonitorDefaultToPrimary = 0x00000002;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
+        int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out Rect rect);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetMonitorInfoW")]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Rect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo
+    {
+        public int Size;
+        public Rect Monitor;
+        public Rect Work;
+        public uint Flags;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string DeviceName;
+    }
+}

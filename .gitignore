@@ -1,0 +1,54 @@
+# ---- 构建产物 ----
+bin/
+obj/
+publish/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+# ---- NuGet（依赖还原到本地 LocalStorage，不入库） ----
+LocalStorage/
+packages/
+*.nupkg
+
+# ---- 内嵌 FFmpeg 二进制（体积大，不入库；放 LGPL 构建的 ffmpeg.exe + ffprobe.exe，见 方案设计.md §14/§17） ----
+tools/ffmpeg/*.exe
+tools/ffmpeg/*.dll
+tools/ffmpeg/*.zip
+
+# ---- 运行时产物 ----
+logs/
+*.log
+crash-*.log
+.bilitmp/
+*.part[0-9]*
+*.m4s
+*.tmp
+
+# ---- 安装包 ----
+*.iss.bak
+Output/
+setup-*.exe
+
+# ---- 图标工具（tools/IconForge）的中间产物：由 spec.json 可重建，不入库 ----
+tools/IconForge/png/
+tools/IconForge/cand/
+tools/IconForge/shot/
+tools/IconForge/app.ico
+
+# ---- 工具/IDE ----
+.idea/
+.vscode/
+.workbuddy/
+Thumbs.db
+desktop.ini
+
+# ---- 自定义文件 ----
+方案设计.md
+视觉规范.md
+design/
+视频下载文件夹/

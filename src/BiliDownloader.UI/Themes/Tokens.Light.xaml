@@ -1,0 +1,59 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <!--
+        浅色主题令牌（视觉规范 §3.1 / §3.2）。键名与 Tokens.Dark.xaml 完全一致，
+        切换主题时只替换本字典，模板里全部用 DynamicResource。
+    -->
+
+    <!-- 基础层 -->
+    <SolidColorBrush x:Key="BgBrush" Color="#F4F6F9" />
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Surface2Brush" Color="#EEF1F6" />
+    <SolidColorBrush x:Key="Surface3Brush" Color="#E4E9F0" />
+    <SolidColorBrush x:Key="LineBrush" Color="#E1E6EE" />
+    <SolidColorBrush x:Key="Line2Brush" Color="#CDD5E0" />
+    <SolidColorBrush x:Key="FgBrush" Color="#151922" />
+    <SolidColorBrush x:Key="Fg2Brush" Color="#5B6472" />
+    <SolidColorBrush x:Key="Fg3Brush" Color="#737C8C" />
+    <SolidColorBrush x:Key="FgOnAccentBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="HoverBrush" Color="#0D101828" />
+
+    <!-- 语义色 -->
+    <SolidColorBrush x:Key="AccentBrush" Color="#FB7299" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#FF8CAD" />
+    <SolidColorBrush x:Key="AccentPressBrush" Color="#E45D85" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#1AFB7299" />
+    <SolidColorBrush x:Key="AccentInkBrush" Color="#D6336C" />
+    <SolidColorBrush x:Key="OkBrush" Color="#0C9C72" />
+    <SolidColorBrush x:Key="WarnBrush" Color="#B36A00" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#D93A4A" />
+    <SolidColorBrush x:Key="OkSoftBrush" Color="#1A0C9C72" />
+    <SolidColorBrush x:Key="WarnSoftBrush" Color="#1AB36A00" />
+    <SolidColorBrush x:Key="DangerSoftBrush" Color="#17D93A4A" />
+
+    <!-- 渐变 / 特殊面 -->
+    <LinearGradientBrush x:Key="ProgressGradientBrush" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Offset="0" Color="#FB7299" />
+        <GradientStop Offset="1" Color="#FF9FC0" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="CoverGradientBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0" Color="#3A2A44" />
+        <GradientStop Offset="0.55" Color="#5B3550" />
+        <GradientStop Offset="1" Color="#8A4A63" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="AvatarGradientBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0" Color="#FF9E7A" />
+        <GradientStop Offset="0.5" Color="#FB7299" />
+        <GradientStop Offset="1" Color="#C86DD7" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="OverlayBrush" Color="#8C141C2A" />
+    <SolidColorBrush x:Key="WindowEdgeBrush" Color="#1A101828" />
+
+    <!-- 布局令牌 -->
+    <sys:Double x:Key="RadiusXs">4</sys:Double>
+    <sys:Double x:Key="RadiusSm">6</sys:Double>
+    <sys:Double x:Key="RadiusMd">10</sys:Double>
+    <sys:Double x:Key="RadiusLg">14</sys:Double>
+    <sys:Double x:Key="RadiusFull">99</sys:Double>
+</ResourceDictionary>

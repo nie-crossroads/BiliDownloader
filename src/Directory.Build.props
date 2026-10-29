@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <!-- .NET 10 默认启用 CET(控制流强制技术 / Shadow Stack) 安全特性，但当前 Windows 10 用户态支持不全，
+         会导致 Roslyn 编译器进程崩溃 (Your Windows doesn't fully support CET)。
+         此处关闭 CET 兼容性以绕过（仅开发期妥协，不影响程序功能）。
+         另外禁用共享编译服务器，避免 VBCSCompiler 缓存到不支持 CET 的状态。 -->
+    <EnableCetCompatibility>false</EnableCetCompatibility>
+    <UseSharedCompilation>false</UseSharedCompilation>
+  </PropertyGroup>
+</Project>

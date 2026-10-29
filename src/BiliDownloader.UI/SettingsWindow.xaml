@@ -1,0 +1,716 @@
+<Window x:Class="BiliDownloader.UI.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:ctl="clr-namespace:BiliDownloader.UI.Controls"
+        Title="设置"
+        Width="700" Height="600" MinWidth="640" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None" AllowsTransparency="False" ResizeMode="CanResize"
+        Background="{DynamicResource BgBrush}"
+        FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI, Microsoft YaHei"
+        TextOptions.TextFormattingMode="Display"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="40" ResizeBorderThickness="6"
+                            GlassFrameThickness="0" CornerRadius="0"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <!-- 自定义 ComboBox 模板下 DisplayMemberPath 不生效（选中项会显示成类型名），
+             统一用 ItemTemplate 显示 Text 属性。OptionItem / QnOption / AudioOptionItem 都有 Text。 -->
+        <DataTemplate x:Key="OptionItemTemplate">
+            <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
+        </DataTemplate>
+
+        <Style x:Key="RowTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Foreground" Value="{DynamicResource FgBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="RowDesc" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource Fg3Brush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,3,0,0" />
+        </Style>
+        <Style x:Key="GroupHead" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+            <Setter Property="Margin" Value="0,16,0,10" />
+        </Style>
+        <Style x:Key="SetRow" TargetType="Grid">
+            <Setter Property="Margin" Value="0,0,0,14" />
+        </Style>
+        <Style x:Key="NumBox" TargetType="TextBox" BasedOn="{StaticResource FieldTextBox}">
+            <Setter Property="Width" Value="62" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="TextAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="NavList" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Height" Value="34" />
+                        <Setter Property="Margin" Value="0,1" />
+                        <Setter Property="Cursor" Value="Hand" />
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                        <!-- 必须显式给前景色：不写的话未选中项继承到魅黑的默认黑字，
+                             深色主题下整列导航都看不见。 -->
+                        <Setter Property="Foreground" Value="{DynamicResource Fg2Brush}" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="Shell" CornerRadius="{StaticResource CornerSm}"
+                                            Background="Transparent" Padding="12,0">
+                                        <ContentPresenter VerticalAlignment="Center" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Shell" Property="Background"
+                                                    Value="{DynamicResource Surface2Brush}" />
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Shell" Property="Background"
+                                                    Value="{DynamicResource SurfaceBrush}" />
+                                            <Setter Property="Foreground"
+                                                    Value="{DynamicResource AccentInkBrush}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="40" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- ============================================================ 标题栏 -->
+        <Grid Grid.Row="0" Background="{DynamicResource Surface2Brush}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                <Border Width="16" Height="16" CornerRadius="{StaticResource CornerXs}"
+                        Background="{DynamicResource AccentBrush}" />
+                <TextBlock Text="设置" FontSize="12.5" FontWeight="SemiBold" Margin="8,0,0,0"
+                           Foreground="{DynamicResource FgBrush}" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                        shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                <!-- 只有关闭：设置窗做成模态，最小化会让它压在任务栏里找不回来。 -->
+                <Button Style="{StaticResource CloseCaptionButton}" Click="OnCloseClick" ToolTip="关闭">
+                    <Path Data="{StaticResource IconClose}" Width="10" Height="10" Stretch="Uniform"
+                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          StrokeThickness="1.3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- ============================================================ 主体：左导航 + 右内容 -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="176" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="{DynamicResource Surface2Brush}" Padding="10,10,10,10">
+                <ListBox Style="{StaticResource NavList}"
+                         ItemsSource="{Binding NavItems}"
+                         SelectedValuePath="Value"
+                         SelectedValue="{Binding SelectedPane, Mode=TwoWay}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Text}" FontSize="12.5" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- 页头 -->
+                <StackPanel Grid.Row="0" Margin="20,16,20,12">
+                    <TextBlock Text="{Binding PaneTitle}" FontSize="15" FontWeight="SemiBold"
+                               Foreground="{DynamicResource FgBrush}" />
+                    <TextBlock Text="{Binding PaneDescription}" FontSize="11.5" Margin="0,4,0,0"
+                               Foreground="{DynamicResource Fg3Brush}" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <!-- 内容 -->
+                <ScrollViewer Grid.Row="1" Padding="20,0,20,0" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <Grid>
+
+                        <!-- ==== 下载 -->
+                        <StackPanel Visibility="{Binding IsDownloadPane, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="保存位置" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="默认保存目录" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="单 P 直接存入，多 P 建同名子目录" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                            Margin="12,0,0,0">
+                                    <TextBox Style="{StaticResource FieldTextBox}" Width="180" Height="30"
+                                             Text="{Binding SaveDirectory, Mode=OneWay}" IsReadOnly="True" />
+                                    <Button Style="{StaticResource SecondaryButton}" Content="更改" Margin="6,0,0,0"
+                                            Command="{Binding BrowseSaveDirectoryCommand}" />
+                                    <Button Style="{StaticResource GhostButton}" Content="打开" Margin="4,0,0,0"
+                                            Command="{Binding OpenSaveDirectoryCommand}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock Text="命名规则" Style="{StaticResource RowTitle}" />
+                            <TextBlock Text="下载前有实时预览，改完即可见效果" Style="{StaticResource RowDesc}" />
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <ComboBox Style="{StaticResource FieldComboBox}" Width="180" Height="30"
+                                          ItemsSource="{Binding NameTemplateOptions}" ItemTemplate="{StaticResource OptionItemTemplate}"
+                                          SelectedValuePath="Value" SelectedValue="{Binding FileNameTemplate, Mode=TwoWay}" />
+                                <TextBlock Text="序号补零位数" FontSize="11" VerticalAlignment="Center" Margin="12,0,6,0"
+                                           Foreground="{DynamicResource Fg3Brush}" />
+                                <ComboBox Style="{StaticResource FieldComboBox}" Width="62" Height="30"
+                                          ItemsSource="{Binding IndexPaddingOptions}"
+                                          SelectedItem="{Binding IndexPadding, Mode=TwoWay}" />
+                            </StackPanel>
+                            <Border Margin="0,8,0,4" Padding="10,7" CornerRadius="{StaticResource CornerSm}"
+                                    Background="{DynamicResource Surface2Brush}">
+                                <TextBlock FontSize="11.5" Foreground="{DynamicResource Fg2Brush}">
+                                    <Run Text="预览：" Foreground="{DynamicResource Fg3Brush}" />
+                                    <Run Text="{Binding NamePreview, Mode=OneWay}" />
+                                </TextBlock>
+                            </Border>
+
+                            <TextBlock Text="默认画质" Style="{StaticResource GroupHead}" />
+                            <TextBlock Text="解析后仍可临时改；同一画质档有 AVC / HEVC / AV1 三条流，编码要单独选。"
+                                       Style="{StaticResource RowDesc}" Margin="0,0,0,8" />
+                            <StackPanel Orientation="Horizontal">
+                                <ComboBox Style="{StaticResource FieldComboBox}" Width="132" Height="30"
+                                          ItemsSource="{Binding QualityOptions}" ItemTemplate="{StaticResource OptionItemTemplate}"
+                                          SelectedValuePath="Qn" SelectedValue="{Binding PreferredQn, Mode=TwoWay}" />
+                                <ComboBox Style="{StaticResource FieldComboBox}" Width="84" Height="30" Margin="8,0,0,0"
+                                          ItemsSource="{Binding CodecOptions}"
+                                          SelectedItem="{Binding PreferredCodec, Mode=TwoWay}" />
+                                <ComboBox Style="{StaticResource FieldComboBox}" Width="96" Height="30" Margin="8,0,0,0"
+                                          ItemsSource="{Binding AudioOptions}" ItemTemplate="{StaticResource OptionItemTemplate}"
+                                          SelectedValuePath="Id" SelectedValue="{Binding PreferredAudioId, Mode=TwoWay}" />
+                            </StackPanel>
+
+                            <TextBlock Text="性能" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="同时下载任务数" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="指同时进行的分 P 数。建议 2–3，过高会互相抢带宽" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                            Margin="12,0,0,0">
+                                    <TextBox Style="{StaticResource NumBox}"
+                                             Text="{Binding MaxConcurrentTasks, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                    <TextBlock Text="个" FontSize="11.5" VerticalAlignment="Center" Margin="6,0,0,0"
+                                               Foreground="{DynamicResource Fg3Brush}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="单任务连接数" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="每个任务的分片并发数。设为 1 可排查风控问题" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                            Margin="12,0,0,0">
+                                    <TextBox Style="{StaticResource NumBox}"
+                                             Text="{Binding ConnectionsPerTask, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                    <TextBlock Text="条" FontSize="11.5" VerticalAlignment="Center" Margin="6,0,0,0"
+                                               Foreground="{DynamicResource Fg3Brush}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="全局限速" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="0 表示不限速。填 0 之外的值会平均分配到各任务" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                            Margin="12,0,0,0">
+                                    <TextBox Style="{StaticResource NumBox}"
+                                             Text="{Binding GlobalSpeedLimitKbps, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                    <TextBlock Text="KB/s" FontSize="11.5" VerticalAlignment="Center" Margin="6,0,0,0"
+                                               Foreground="{DynamicResource Fg3Brush}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock Text="完成之后" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="自动打开所在文件夹" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="单个任务完成时打开，批量完成时只在最后打开一次" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" Style="{StaticResource Switch}"
+                                              VerticalAlignment="Center" Margin="12,0,0,0"
+                                              IsChecked="{Binding AutoOpenFolder, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="完成时发送系统通知" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="窗口在后台时也能看到" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" Style="{StaticResource Switch}"
+                                              VerticalAlignment="Center" Margin="12,0,0,0"
+                                              IsChecked="{Binding NotifyOnComplete, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="同名文件处理" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="重命名 = 追加 (1)；覆盖会先删旧文件，不可撤销" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Style="{StaticResource FieldComboBox}" Width="110" Height="30"
+                                          VerticalAlignment="Center" Margin="12,0,0,0"
+                                          ItemsSource="{Binding ExistingFileActionOptions}" ItemTemplate="{StaticResource OptionItemTemplate}"
+                                          SelectedValuePath="Value" SelectedValue="{Binding ExistingFileAction, Mode=TwoWay}" />
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- ==== 基础 -->
+                        <StackPanel Visibility="{Binding IsBasicPane, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="启动" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="开机时自动启动" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="登录 Windows 后在后台启动，不弹出主窗口" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" Style="{StaticResource Switch}"
+                                              VerticalAlignment="Center" Margin="12,0,0,0"
+                                              IsChecked="{Binding AutoStart, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="启动时检查更新" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="有新版本时在标题栏给出提示，不强制升级" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" Style="{StaticResource Switch}"
+                                              VerticalAlignment="Center" Margin="12,0,0,0"
+                                              IsChecked="{Binding CheckUpdateOnStartup, Mode=TwoWay}" />
+                            </Grid>
+
+                            <TextBlock Text="关闭行为" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="点关闭按钮时" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="下载未完成时选择退出会先弹确认" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Style="{StaticResource FieldComboBox}" Width="130" Height="30"
+                                          VerticalAlignment="Center" Margin="12,0,0,0"
+                                          ItemsSource="{Binding CloseActionOptions}" ItemTemplate="{StaticResource OptionItemTemplate}"
+                                          SelectedValuePath="Value" SelectedValue="{Binding CloseAction, Mode=TwoWay}" />
+                            </Grid>
+
+                            <TextBlock Text="语言与数据位置" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="界面语言" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="v1 仅提供简体中文" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Style="{StaticResource FieldComboBox}" Width="130" Height="30"
+                                          VerticalAlignment="Center" Margin="12,0,0,0"
+                                          ItemsSource="{Binding LanguageOptions}" ItemTemplate="{StaticResource OptionItemTemplate}"
+                                          SelectedValuePath="Value" SelectedValue="{Binding Language, Mode=TwoWay}" />
+                            </Grid>
+
+                            <TextBlock Text="配置文件与日志" Style="{StaticResource RowTitle}" />
+                            <TextBlock Text="设置和日志分开存放，重装程序不会丢设置" Style="{StaticResource RowDesc}" />
+                            <Border Margin="0,8,0,4" Padding="10,8" CornerRadius="{StaticResource CornerSm}"
+                                    Background="{DynamicResource Surface2Brush}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource MonoText}" Text="{Binding ConfigPathText, Mode=OneWay}"
+                                               TextTrimming="CharacterEllipsis" FontSize="11" />
+                                    <TextBlock Style="{StaticResource MonoText}" Text="{Binding LogDirText, Mode=OneWay}"
+                                               TextTrimming="CharacterEllipsis" FontSize="11" Margin="0,4,0,0" />
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Text="快捷键" Style="{StaticResource GroupHead}" />
+                            <TextBlock Style="{StaticResource RowDesc}" Margin="0,0,0,6"
+                                       Text="粘贴链接后可直接回车解析；Esc 关闭当前弹层；Ctrl+W 关闭主窗口。" />
+                        </StackPanel>
+
+                        <!-- ==== 网络 -->
+                        <StackPanel Visibility="{Binding IsNetworkPane, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="代理" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="代理模式" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="手动指定后所有接口与下载都走该代理" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Style="{StaticResource FieldComboBox}" Width="130" Height="30"
+                                          VerticalAlignment="Center" Margin="12,0,0,0"
+                                          ItemsSource="{Binding ProxyModeOptions}" ItemTemplate="{StaticResource OptionItemTemplate}"
+                                          SelectedValuePath="Value" SelectedValue="{Binding ProxyMode, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Grid Style="{StaticResource SetRow}"
+                                  Visibility="{Binding IsProxyManual, Converter={StaticResource BoolToVisibility}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="代理地址" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="形如 http://127.0.0.1:7890" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <TextBox Grid.Column="1" Style="{StaticResource FieldTextBox}" Width="180" Height="30"
+                                         VerticalAlignment="Center" Margin="12,0,0,0"
+                                         ctl:Field.Placeholder="http://127.0.0.1:7890"
+                                         Text="{Binding ProxyAddress, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                            </Grid>
+
+                            <TextBlock Text="请求" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="请求超时" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="单次请求的等待上限，超时后按重试策略处理" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                            Margin="12,0,0,0">
+                                    <TextBox Style="{StaticResource NumBox}"
+                                             Text="{Binding RequestTimeoutSeconds, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                    <TextBlock Text="秒" FontSize="11.5" VerticalAlignment="Center" Margin="6,0,0,0"
+                                               Foreground="{DynamicResource Fg3Brush}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="失败自动重试" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="网络类错误的重试次数，风控错误不重试" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                            Margin="12,0,0,0">
+                                    <TextBox Style="{StaticResource NumBox}"
+                                             Text="{Binding MaxRetries, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                    <TextBlock Text="次" FontSize="11.5" VerticalAlignment="Center" Margin="6,0,0,0"
+                                               Foreground="{DynamicResource Fg3Brush}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="接口自动降级" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="主接口异常时自动切换备用域名" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" Style="{StaticResource Switch}"
+                                              VerticalAlignment="Center" Margin="12,0,0,0"
+                                              IsChecked="{Binding AutoFallbackEndpoint, Mode=TwoWay}" />
+                            </Grid>
+
+                            <TextBlock Text="登录兜底" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="手动粘贴 Cookie" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="扫码登录不可用时，从浏览器复制 SESSDATA 兜底" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="打开对话框"
+                                        VerticalAlignment="Center" Margin="12,0,0,0"
+                                        Command="{Binding OpenCookieDialogCommand}" />
+                            </Grid>
+
+                            <TextBlock Text="连通性" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="接口可达" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="{Binding ConnectionStatus}" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="检测"
+                                        VerticalAlignment="Center" Margin="12,0,0,0"
+                                        Command="{Binding TestConnectionCommand}" />
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- ==== 外观 -->
+                        <StackPanel Visibility="{Binding IsAppearancePane, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="主题" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="深色主题" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="关闭即浅色。默认浅色，深色下所有令牌同步切换" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" Style="{StaticResource Switch}"
+                                              VerticalAlignment="Center" Margin="12,0,0,0"
+                                              IsChecked="{Binding IsDarkTheme, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="主题色" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="按钮、选中项与进度条的主色，切换后全窗口立即生效" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Style="{StaticResource FieldComboBox}" Width="150"
+                                          VerticalAlignment="Center" Margin="12,0,0,0"
+                                          ItemsSource="{Binding AccentOptions}"
+                                          SelectedValuePath="Key"
+                                          SelectedValue="{Binding AccentColor, Mode=TwoWay}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Ellipse Width="12" Height="12" Fill="{Binding Swatch}"
+                                                         VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding Name}" Margin="8,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+
+                            <TextBlock Text="任务列表" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="显示封面缩略图" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="关闭后任务行用纯渐变色块，省内存" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" Style="{StaticResource Switch}"
+                                              VerticalAlignment="Center" Margin="12,0,0,0"
+                                              IsChecked="{Binding ShowThumbnails, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="完成后弱化进度条" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="完成态降到 50% 不透明度，降低整屏视觉噪音" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" Style="{StaticResource Switch}"
+                                              VerticalAlignment="Center" Margin="12,0,0,0"
+                                              IsChecked="{Binding FadeCompletedProgress, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="减少动画" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="关闭扫光与弹层淡入，适合远程桌面" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" Style="{StaticResource Switch}"
+                                              VerticalAlignment="Center" Margin="12,0,0,0"
+                                              IsChecked="{Binding ReduceMotion, Mode=TwoWay}" />
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- ==== 关于与诊断 -->
+                        <StackPanel Visibility="{Binding IsAboutPane, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="版本" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="BiliDownloader" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="{Binding VersionText, StringFormat=版本 {0}}" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="安装位置" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="{Binding InstallPathText}" Style="{StaticResource RowDesc}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Style="{StaticResource GhostButton}" Content="打开"
+                                        VerticalAlignment="Center" Margin="12,0,0,0"
+                                        Command="{Binding OpenInstallFolderCommand}" />
+                            </Grid>
+
+                            <TextBlock Text="依赖组件" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="FFmpeg" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="{Binding FfmpegStatusText}" Style="{StaticResource RowDesc}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="指定路径"
+                                        VerticalAlignment="Center" Margin="12,0,0,0"
+                                        Command="{Binding PickFfmpegCommand}" />
+                            </Grid>
+
+                            <TextBlock Text="日志与清理" Style="{StaticResource GroupHead}" />
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="日志级别" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="出问题时切到「详细」，复现后把日志目录打包发出来" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Style="{StaticResource FieldComboBox}" Width="130" Height="30"
+                                          VerticalAlignment="Center" Margin="12,0,0,0"
+                                          ItemsSource="{Binding LogLevelOptions}" ItemTemplate="{StaticResource OptionItemTemplate}"
+                                          SelectedValuePath="Value" SelectedValue="{Binding LogLevel, Mode=TwoWay}" />
+                            </Grid>
+
+                            <Grid Style="{StaticResource SetRow}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="日志文件" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="崩溃日志与运行日志都在这个目录" Style="{StaticResource RowDesc}" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Style="{StaticResource GhostButton}" Content="打开目录"
+                                        VerticalAlignment="Center" Margin="12,0,0,0"
+                                        Command="{Binding OpenLogFolderCommand}" />
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+
+                <!-- 底部 -->
+                <Border Grid.Row="2" Padding="20,10" Background="{DynamicResource Surface2Brush}">
+                    <Grid>
+                        <TextBlock VerticalAlignment="Center" FontSize="11"
+                                   Foreground="{DynamicResource Fg3Brush}"
+                                   Text="设置保存在 %APPDATA%\BiliDownloader\settings.json" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <!-- 破坏性操作要给足「这是个按钮」的信号：有边框有底色，
+                                 不像 GhostButton 那样只在悬浮时可见。 -->
+                            <Button Style="{StaticResource SecondaryButton}" Content="恢复默认"
+                                    Command="{Binding RestoreDefaultsCommand}" />
+                            <Button Style="{StaticResource PrimaryButtonSmall}" Content="完成" Margin="8,0,0,0"
+                                    Click="OnCloseClick" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

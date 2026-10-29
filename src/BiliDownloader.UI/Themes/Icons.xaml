@@ -1,0 +1,21 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- 关键图标用内联 Geometry（视觉规范 §8）：不赌 Segoe Fluent Icons 的码位漂移。 -->
+
+    <Geometry x:Key="IconLink">M6.6,9.4 A2.8,2.8 0 0 0 10.6,9.4 L12.6,7.4 A2.8,2.8 0 0 0 8.6,3.4 L7.9,4.1 M9.4,6.6 A2.8,2.8 0 0 0 5.4,6.6 L3.4,8.6 A2.8,2.8 0 0 0 7.4,12.6 L8.1,11.9</Geometry>
+    <Geometry x:Key="IconDownload">M6,1.6 L6,7.6 M3.5,5.2 L6,7.8 L8.5,5.2 M1.8,9 L1.8,9.9 A0.9,0.9 0 0 0 2.7,10.8 L9.3,10.8 A0.9,0.9 0 0 0 10.2,9.9 L10.2,9</Geometry>
+    <Geometry x:Key="IconPause">M2.5,1.8 L4.9,1.8 L4.9,10.2 L2.5,10.2 Z M7.1,1.8 L9.5,1.8 L9.5,10.2 L7.1,10.2 Z</Geometry>
+    <Geometry x:Key="IconPlay">M3.4,1.9 L10,6 L3.4,10.1 Z</Geometry>
+    <Geometry x:Key="IconClose">M1,1 L9,9 M9,1 L1,9</Geometry>
+    <Geometry x:Key="IconMinimize">M0,0.5 L10,0.5</Geometry>
+    <Geometry x:Key="IconMaximize">M0.5,0.5 L8.5,0.5 L8.5,8.5 L0.5,8.5 Z</Geometry>
+    <Geometry x:Key="IconChevronRight">M2.4,1 L5.4,4 L2.4,7</Geometry>
+    <Geometry x:Key="IconChevronDown">M1,1 L5,4.8 L9,1</Geometry>
+    <Geometry x:Key="IconFolder">M1.8,4.6 A1.2,1.2 0 0 1 3,3.4 L6,3.4 L7.3,5 L13.3,5 A1.2,1.2 0 0 1 14.5,6.2 L14.5,12.2 A1.2,1.2 0 0 1 13.3,13.4 L3,13.4 A1.2,1.2 0 0 1 1.8,12.2 Z</Geometry>
+    <Geometry x:Key="IconSettings">M2,4.6 L14,4.6 M2,11.4 L14,11.4</Geometry>
+    <Geometry x:Key="IconUser">M8,2.9 A2.7,2.7 0 1 1 8,8.3 A2.7,2.7 0 1 1 8,2.9 Z M3,13.6 C3.7,11.1 5.7,9.6 8,9.6 C10.3,9.6 12.3,11.1 13,13.6</Geometry>
+    <Geometry x:Key="IconRefresh">M20,12 A8,8 0 1 1 17.4,6.1 M20,3.6 L20,7 L16.6,7</Geometry>
+    <Geometry x:Key="IconCheckCircle">M12,3 A9,9 0 1 1 12,21 A9,9 0 1 1 12,3 Z M8,12.4 L10.7,15.1 L16,9.6</Geometry>
+    <Geometry x:Key="IconScan">M7,2.6 L17,2.6 A2.4,2.4 0 0 1 17,21.4 L7,21.4 A2.4,2.4 0 0 1 7,2.6 Z M10.6,18.4 L13.4,18.4</Geometry>
+    <Geometry x:Key="IconWarn">M12,3 L21,20 L3,20 Z M12,9 L12,14 M12,16.6 L12,17.2</Geometry>
+</ResourceDictionary>
