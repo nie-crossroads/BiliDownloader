@@ -101,7 +101,7 @@ public partial class MainViewModel : ObservableObject
 
         try
         {
-            var info = await _service.ProbeAsync(InputUrl.Trim());
+            var info = await _service.ProbeAsync(InputUrl.Trim(), _settings.PreferredCodec);
 
             if (info.IsPaidContent)
             {
@@ -219,6 +219,9 @@ public partial class MainViewModel : ObservableObject
 
             // 入队后保留输入与预览：用户需要继续看到解析出来的信息（标题/画质/选集），
             // 方便核对结果或接着下载其它分 P；不再清空输入框（§6.1 原设计要求清空，按反馈调整）。
+            // 入队成功：解析出来的信息框保留（方便核对与接着下其它分 P），
+            // 但选集勾选清空——不然连点两次「下载」会把同一批分 P 再下一遍。
+            preview.ClearPageSelection();
             HasError = false;
             ErrorText = string.Empty;
         }
@@ -635,7 +638,7 @@ public partial class MainViewModel : ObservableObject
 
         try
         {
-            var info = await _service.ProbeAsync(url);
+            var info = await _service.ProbeAsync(url, _settings.PreferredCodec);
             if (info.IsPaidContent) return;
 
             // 封面已经加载过，复用同一张图，避免预览卡闪烁。

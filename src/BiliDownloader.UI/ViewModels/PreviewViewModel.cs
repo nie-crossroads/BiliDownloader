@@ -149,6 +149,16 @@ public partial class PreviewViewModel : ObservableObject
         CoverImage = await ImageCache.LoadAsync(CoverUrl, 344).ConfigureAwait(true);
     }
 
+    /// <summary>
+    /// 下载入队后把选集勾选清掉：用户要重新挑一集才能再下一次，
+    /// 免得连点两次「下载」把同一批分 P 重复入队。预览卡本身保留。
+    /// </summary>
+    public void ClearPageSelection()
+    {
+        foreach (var chip in Pages) chip.IsSelected = false;
+        RefreshSelectionNote();
+    }
+
     [RelayCommand]
     private void SelectAll()
     {

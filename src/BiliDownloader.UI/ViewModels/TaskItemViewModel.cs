@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Windows.Threading;
 using BiliDownloader.Core.BiliApi;
 using BiliDownloader.Core.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -67,6 +68,86 @@ public partial class TaskItemViewModel : ObservableObject
     [ObservableProperty] private bool _isRunning;
     [ObservableProperty] private string _qualityText = string.Empty;
 
+    // ----------------------------------------------------- 多 P 层叠卡背
+    // 批量任务不是一行走完就算完：后面还排着几集要用「层叠的卡」看出来。
+    // 规则：2P → 主卡 + 1 层卡背；3P 及以上 → 主卡 + 2 层卡背；单 P 不叠。
+    // 每完成一集，卡背按顺序往主卡方向滚一次（GhostPeek 由 ViewModel 推，见 StartRollForward）。
+
+    private const double GhostRestNear = 6;
+    private const double GhostRestFar = 12;
+    private const double GhostRollExtra = 6;
+    private const int RollDurationMs = 520;
+
+    private DispatcherTimer? _rollTimer;
+    private DateTime _rollStartedAt;
+    private int _completedSeen;
+
+    /// <summary>层叠总数（主卡 + 卡背），1 表示不叠。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCardStack))]
+    [NotifyPropertyChangedFor(nameof(HasSecondCard))]
+    [NotifyPropertyChangedFor(nameof(HasThirdCard))]
+    private int _stackDepth = 1;
+
+    public bool HasCardStack => StackDepth >= 2;
+    public bool HasSecondCard => StackDepth >= 2;
+    public bool HasThirdCard => StackDepth >= 3;
+
+    /// <summary>近层卡背相对主卡的下移量（px）。静止 5，滚动时会被推到负值（藏到主卡后面）。</summary>
+    [ObservableProperty] private double _ghostPeekNear = GhostRestNear;
+
+    /// <summary>远层卡背相对主卡的下移量（px）。静止 10。</summary>
+    [ObservableProperty] private double _ghostPeekFar = GhostRestFar;
+
+    private void UpdateStack(VideoTask task)
+    {
+        // 终态（完成 / 失败 / 取消）不再排队，层叠收起，避免残留一堆没意义的卡背。
+        StackDepth = task.Status.IsTerminal()
+            ? 1
+            : Math.Clamp(task.Pages.Count, 1, 3);
+
+        var completed = task.CompletedCount;
+        if (completed > _completedSeen && !task.Status.IsTerminal())
+            StartRollForward();
+        _completedSeen = completed;
+    }
+
+    /// <summary>
+    /// 卡背向前滚一次：正弦脉冲把两层卡背推到主卡背后（看不见）再弹回原位，
+    /// 观感就是「后面排队的往前提了一格」。用 DispatcherTimer 推进而不是 Storyboard，
+    /// 是因为 DataTemplate 里的 Storyboard 拿不到稳定的 namescope，容易在应用时炸。
+    /// </summary>
+    private void StartRollForward()
+    {
+        if (_rollTimer is null)
+        {
+            _rollTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render,
+                OnRollTick, Dispatcher.CurrentDispatcher);
+        }
+
+        _rollStartedAt = DateTime.Now;
+        _rollTimer.Start();
+    }
+
+    private void OnRollTick(object? sender, EventArgs e)
+    {
+        if (_rollTimer is null) return;
+
+        var elapsed = (DateTime.Now - _rollStartedAt).TotalMilliseconds;
+        if (elapsed >= RollDurationMs)
+        {
+            _rollTimer.Stop();
+            GhostPeekNear = GhostRestNear;
+            GhostPeekFar = GhostRestFar;
+            return;
+        }
+
+        // 0 → 1 → 0 的半周正弦：一次推到底，回程也是顺势减速，不会在终点顿一下。
+        var pulse = Math.Sin(elapsed / RollDurationMs * Math.PI);
+        GhostPeekNear = GhostRestNear - pulse * (GhostRestNear + GhostRollExtra);
+        GhostPeekFar = GhostRestFar - pulse * (GhostRestFar + GhostRollExtra);
+    }
+
     public void Update(VideoTask task, double speed)
     {
         var page = task.Pages.FirstOrDefault(p => p.Status == DownloadStatus.Downloading)
@@ -122,6 +203,7 @@ public partial class TaskItemViewModel : ObservableObject
         PageLabel = task.Pages.Count > 1 && page is not null ? $"P{page.Index}" : string.Empty;
         QualityText = page is { Qn: > 0 } ? $"{QualityCatalog.QualityName(page.Qn)} · {QualityCatalog.CodecName(page.CodecId)}" : string.Empty;
 
+        UpdateStack(task);
         MetaText = BuildMeta(task, page);
         MetaIsError = task.Status == DownloadStatus.Failed;
     }

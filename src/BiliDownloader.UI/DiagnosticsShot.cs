@@ -3,6 +3,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using BiliDownloader.Core.BiliApi;
 using BiliDownloader.Core.Models;
 using BiliDownloader.UI.Services;
 using BiliDownloader.UI.ViewModels;
@@ -50,6 +51,7 @@ internal static class DiagnosticsShot
         var wantDownload = args.Contains("--download");
 
         var report = new StringBuilder();
+        report.AppendLine($"quality catalog   : {string.Join(" | ", QualityCatalog.QualityList.Select(QualityCatalog.QualityName))}");
         report.AppendLine($"window state      : {window.WindowState}");
         report.AppendLine($"actual size       : {window.ActualWidth:0.#} x {window.ActualHeight:0.#}");
         report.AppendLine($"min size          : {window.MinWidth:0.#} x {window.MinHeight:0.#}");
@@ -59,10 +61,12 @@ internal static class DiagnosticsShot
         await Shot(window, dir, "01-empty-light.png", report);
         report.AppendLine($"tasks={vm.TaskCount} hasPreview={vm.HasPreview} log={vm.LogCount} loggedIn={vm.IsLoggedIn}");
 
-        ThemeService.Apply("Dark");
+        // --theme=Dark 时整轮取证都留在深色里：后面几张（层叠卡背等）也要能在深色下看清。
+        var keepTheme = ArgValue(args, "--theme");
+        ThemeService.Apply(keepTheme ?? "Dark");
         await Task.Delay(600);
         await Shot(window, dir, "02-empty-dark.png", report);
-        ThemeService.Apply("Light");
+        ThemeService.Apply(keepTheme ?? "Light");
         await Task.Delay(400);
 
         if (!string.IsNullOrWhiteSpace(url))
@@ -179,6 +183,31 @@ internal static class DiagnosticsShot
             await Task.Delay(300);
         }
 
+        if (int.TryParse(ArgValue(args, "--stack"), out var stackPages) && stackPages > 0)
+        {
+            // 离线造多 P 任务行：验证层叠卡背的层数与「完成一集后卡背向前滚」的位移量。
+            var (fakeTask, item) = BuildFakeTask(stackPages);
+            vm.Tasks.Insert(0, item);
+            await Task.Delay(600);
+            await Shot(window, dir, $"20-task-stack-{stackPages}p.png", report);
+            report.AppendLine($"stack {stackPages}p        : depth={item.StackDepth} second={item.HasSecondCard} third={item.HasThirdCard} peek={item.GhostPeekNear:0.#}/{item.GhostPeekFar:0.#} meta=[{item.MetaText}]");
+
+            // 把第 1 集标成已完成：卡背应该先往前推，再回到静止位置。
+            fakeTask.Pages[0].Status = DownloadStatus.Completed;
+            fakeTask.Pages[0].Progress = 1;
+            fakeTask.Pages[0].ReceivedBytes = fakeTask.Pages[0].TotalBytes;
+            if (fakeTask.Pages.Count > 1) fakeTask.Pages[1].Status = DownloadStatus.Downloading;
+            item.Update(fakeTask, 0);
+
+            await Task.Delay(130);
+            await Shot(window, dir, $"21-task-stack-{stackPages}p-rolling.png", report);
+            report.AppendLine($"stack rolling     : peek={item.GhostPeekNear:0.#}/{item.GhostPeekFar:0.#} meta=[{item.MetaText}]");
+
+            await Task.Delay(700);
+            await Shot(window, dir, $"22-task-stack-{stackPages}p-settled.png", report);
+            report.AppendLine($"stack settled     : peek={item.GhostPeekNear:0.#}/{item.GhostPeekFar:0.#} meta=[{item.MetaText}]");
+        }
+
         if (args.Contains("--settings"))
         {
             var services = ((App)Application.Current).Services;
@@ -190,6 +219,10 @@ internal static class DiagnosticsShot
             var settingsWindow = new SettingsWindow(settingsVm) { Owner = window };
             settingsWindow.Show();
             await Task.Delay(700);
+
+            // 默认页（不点任何导航）：应为「基础」
+            await Shot(settingsWindow, dir, "11-settings-default.png", report);
+            report.AppendLine($"settings default  : pane=[{settingsVm.SelectedPane}] title=[{settingsVm.PaneTitle}]");
 
             foreach (var pane in new[] { "download", "basic", "network", "appearance", "about" })
             {
@@ -272,9 +305,8 @@ internal static class DiagnosticsShot
                 new QualityOption(16, 7, "360P 流畅", "360P", true, null, 640, 360, 320_000),
                 new QualityOption(64, 7, "720P 高清", "720P", true, null, 1280, 720, 1_800_000),
                 new QualityOption(80, 7, "1080P 高清", "1080P", true, null, 1920, 1080, 3_200_000),
-                new QualityOption(80, 12, "1080P 高清 HEVC", "1080P HEVC", true, null, 1920, 1080, 2_400_000),
                 new QualityOption(116, 7, "4K 超清", "4K", false, "需登录", 3840, 2160, 12_000_000),
-                new QualityOption(127, 12, "8K 超高清", "8K", false, "大会员", 7680, 4320, 40_000_000)
+                new QualityOption(127, 7, "8K 超清", "8K", false, "大会员", 7680, 4320, 40_000_000)
             ],
             Audios =
             [
@@ -284,6 +316,45 @@ internal static class DiagnosticsShot
                 new AudioOption(30250, "杜比全景声", false, "需登录", 320_000 * 8)
             ]
         };
+    }
+
+    /// <summary>
+    /// 合成一个正在下载的多 P 任务（第 1 集下载中、其余排队），
+    /// 供 <c>--stack</c> 取证层叠卡背用：真实下载要联网，而卡背层数只跟分 P 数有关。
+    /// </summary>
+    private static (VideoTask Task, TaskItemViewModel Item) BuildFakeTask(int pages)
+    {
+        var task = new VideoTask
+        {
+            Bvid = "BV1xx411c7mD",
+            Title = "合成数据：多 P 任务行（层叠卡背取证）",
+            Duration = TimeSpan.FromMinutes(11 * pages),
+            TotalPages = pages,
+            Status = DownloadStatus.Downloading,
+            SaveDirectory = Path.GetTempPath(),
+            Pages = Enumerable.Range(1, pages)
+                .Select(i => new TaskPageItem
+                {
+                    Cid = 90000 + i,
+                    Index = i,
+                    Part = $"第 {i} 集",
+                    Duration = TimeSpan.FromMinutes(11),
+                    Qn = 80,
+                    CodecId = 7,
+                    AudioId = 30280,
+                    TotalBytes = 320_000_000,
+                    ReceivedBytes = i == 1 ? 134_000_000 : 0,
+                    Progress = i == 1 ? 0.42 : 0,
+                    Status = i == 1 ? DownloadStatus.Downloading : DownloadStatus.Pending
+                })
+                .ToList()
+        };
+
+        var item = new TaskItemViewModel(task,
+            _ => { }, _ => { }, _ => { }, _ => { }, _ => { });
+        task.Progress = 0.42;
+        item.Update(task, 2_600_000);
+        return (task, item);
     }
 
     private static async Task Shot(Window window, string dir, string name, StringBuilder log)

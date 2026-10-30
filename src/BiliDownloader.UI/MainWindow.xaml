@@ -23,10 +23,44 @@
     <Window.Resources>
         <!-- ============================================================ 任务行 -->
         <DataTemplate x:Key="TaskItemTemplate" DataType="{x:Type vm:TaskItemViewModel}">
-            <Border x:Name="Row" Margin="0,0,0,8" Padding="11,12"
-                    Background="{DynamicResource SurfaceBrush}"
-                    BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"
-                    CornerRadius="{StaticResource CornerMd}" SnapsToDevicePixels="True">
+            <!-- 单个任务单元。多 P 任务会在主卡后面垫 1~2 层卡背（规则见 TaskItemViewModel.StackDepth），
+                 所以外层 Grid 要预留出卡背露出来的高度，否则会压到下一行。 -->
+            <Grid x:Name="CardShell" Margin="0,0,0,8">
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasCardStack}" Value="True">
+                                <Setter Property="Margin" Value="0,0,0,22" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+
+                <!-- 远端卡背：只在 3P 及以上出现。底色比主卡更深一档、描边用 Line2，
+                     这样浅色下是「越往后越深」，深色下是「越往后越浅」，两头都能看出层次。 -->
+                <Border x:Name="GhostFar" Margin="14,0,14,0" CornerRadius="{StaticResource CornerMd}"
+                        Background="{DynamicResource Surface3Brush}"
+                        BorderBrush="{DynamicResource Line2Brush}" BorderThickness="1"
+                        Visibility="{Binding HasThirdCard, Converter={StaticResource BoolToVisibility}}">
+                    <Border.RenderTransform>
+                        <TranslateTransform Y="{Binding GhostPeekFar}" />
+                    </Border.RenderTransform>
+                </Border>
+
+                <!-- 近端卡背：2P 及以上出现 -->
+                <Border x:Name="GhostNear" Margin="7,0,7,0" CornerRadius="{StaticResource CornerMd}"
+                        Background="{DynamicResource Surface2Brush}"
+                        BorderBrush="{DynamicResource Line2Brush}" BorderThickness="1"
+                        Visibility="{Binding HasSecondCard, Converter={StaticResource BoolToVisibility}}">
+                    <Border.RenderTransform>
+                        <TranslateTransform Y="{Binding GhostPeekNear}" />
+                    </Border.RenderTransform>
+                </Border>
+
+                <Border x:Name="Row" Padding="11,12"
+                        Background="{DynamicResource SurfaceBrush}"
+                        BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"
+                        CornerRadius="{StaticResource CornerMd}" SnapsToDevicePixels="True">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="86" />
@@ -200,6 +234,7 @@
                     </StackPanel>
                 </Grid>
             </Border>
+            </Grid>
 
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding IsMouseOver, ElementName=Row}" Value="True">

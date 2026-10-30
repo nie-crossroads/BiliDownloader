@@ -51,7 +51,8 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
     public event EventHandler<TaskProgressEventArgs>? ProgressChanged;
     public event EventHandler<TaskStateChangedEventArgs>? StateChanged;
 
-    public async Task<VideoInfo> ProbeAsync(string rawInput, CancellationToken ct = default)
+    public async Task<VideoInfo> ProbeAsync(string rawInput, string? preferredCodec = null,
+        CancellationToken ct = default)
     {
         var parsed = await _parser.ParseAsync(rawInput, _http, ct).ConfigureAwait(false);
         var id = parsed.Bvid ?? (parsed.Avid is { } avid ? $"av{avid}" : null);
@@ -77,7 +78,7 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
         return info with
         {
             SelectedPage = parsed.Page,
-            Qualities = QualityCatalog.BuildVideoOptions(play, _api.IsLoggedIn, isVip),
+            Qualities = QualityCatalog.BuildVideoOptions(play, _api.IsLoggedIn, isVip, preferredCodec),
             Audios = QualityCatalog.BuildAudioOptions(play, _api.IsLoggedIn, isVip)
         };
     }

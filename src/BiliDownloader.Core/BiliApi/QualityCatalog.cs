@@ -16,13 +16,10 @@ public static class QualityCatalog
         (125, "HDR 真彩", 2),
         (120, "4K 超清", 2),
         (116, "1080P60 高帧率", 1),
-        (112, "1080P+ 高码率", 1),
         (80, "1080P 高清", 0),
-        (74, "720P60", 1),
         (64, "720P 高清", 0),
         (32, "480P 清晰", 0),
-        (16, "360P 流畅", 0),
-        (6, "240P 极速", 0)
+        (16, "360P 流畅", 0)
     ];
 
     private static readonly (int Id, string Name, int Permission)[] AudioTable =
@@ -57,28 +54,29 @@ public static class QualityCatalog
     /// <summary>
     /// 由 playurl 结果 + 账号权限生成下拉项。接口里有的档位才可用，
     /// 其余档位保留但灰显并标注原因（需登录 / 需大会员 / 该视频无此画质）。
+    /// <para>
+    /// 每个清晰度只出一条：同一 qn 常常同时给 AVC / HEVC / AV1 三条流，下拉里并列展示会让用户
+    /// 先纠结编码再纠结清晰度，而设置里已经有统一的「默认编码」。这里按 preferredCodec 挑一路，
+    /// 挑不到再按 AVC &gt; HEVC &gt; AV1 兜底，所以文案就是纯清晰度名，不带编码后缀。
+    /// </para>
     /// </summary>
     public static IReadOnlyList<QualityOption> BuildVideoOptions(
-        PlayUrlResult play, bool isLoggedIn, bool isVip)
+        PlayUrlResult play, bool isLoggedIn, bool isVip, string? preferredCodec = null)
     {
+        var wanted = CodecIdFromName(preferredCodec);
         var result = new List<QualityOption>();
 
         foreach (var (qn, name, permission) in VideoQnTable)
         {
-            var streams = play.Videos.Where(v => v.Id == qn)
-                                     .OrderBy(v => CodecPriority(v.CodecId))
-                                     .ToList();
+            var stream = play.Videos.Where(v => v.Id == qn)
+                                    .OrderBy(v => CodecRank(v.CodecId, wanted))
+                                    .FirstOrDefault();
 
-            if (streams.Count > 0)
+            if (stream is not null)
             {
-                // 同一 qn 多条编码：按 AVC > HEVC > AV1 并列展示
-                foreach (var s in streams)
-                {
-                    var codec = CodecName(s.CodecId);
-                    result.Add(new QualityOption(
-                        qn, s.CodecId, $"{name} · {codec}", name, true, null,
-                        s.Width, s.Height, s.Bandwidth));
-                }
+                result.Add(new QualityOption(
+                    qn, stream.CodecId, name, name, true, null,
+                    stream.Width, stream.Height, stream.Bandwidth));
                 continue;
             }
 
@@ -88,6 +86,7 @@ public static class QualityCatalog
                 1 when !isLoggedIn => "需登录",
                 _ => "该视频无此画质"
             };
+            // 不可用档位没有流可挑，CodecId 记 0；真下单前必然会换成用户实际选中的可用档。
             result.Add(new QualityOption(qn, 0, name, name, false, reason, 0, 0, 0));
         }
 
@@ -120,18 +119,16 @@ public static class QualityCatalog
         return result;
     }
 
-    /// <summary>默认画质：优先设置里的 preferredQn，取不到就取可用的最高档（AVC 优先）。</summary>
+    /// <summary>
+    /// 默认画质：优先设置里的 preferredQn，取不到就取可用的最高档。
+    /// 现在每个 qn 只有一条选项，codecId 只在同 qn 仍有并列项时用来挑 nearer 的那条。
+    /// </summary>
     public static QualityOption? PickDefault(IReadOnlyList<QualityOption> options, int preferredQn, string preferredCodec)
     {
         var available = options.Where(o => o.IsAvailable).ToList();
         if (available.Count == 0) return null;
 
-        var codecId = preferredCodec switch
-        {
-            "HEVC" => 12,
-            "AV1" => 13,
-            _ => 7
-        };
+        var codecId = CodecIdFromName(preferredCodec);
 
         return available.FirstOrDefault(o => o.Qn == preferredQn && o.CodecId == codecId)
             ?? available.Where(o => o.Qn == preferredQn).OrderBy(o => CodecPriority(o.CodecId)).FirstOrDefault()
@@ -147,6 +144,14 @@ public static class QualityCatalog
             ?? options.FirstOrDefault(o => o.IsAvailable);
     }
 
+    /// <summary>设置里存的编码名 → codecid。认不出来一律按 AVC 处理。</summary>
+    public static int CodecIdFromName(string? name) => name switch
+    {
+        "HEVC" => 12,
+        "AV1" => 13,
+        _ => 7
+    };
+
     private static int CodecPriority(int codecId) => codecId switch
     {
         7 => 0,
@@ -154,4 +159,8 @@ public static class QualityCatalog
         13 => 2,
         _ => 3
     };
+
+    /// <summary>同清晰度多条流时的挑选顺序：用户指定的编码第一，其余按 AVC &gt; HEVC &gt; AV1。</summary>
+    private static int CodecRank(int codecId, int wanted) =>
+        codecId == wanted ? 0 : CodecPriority(codecId) + 1;
 }

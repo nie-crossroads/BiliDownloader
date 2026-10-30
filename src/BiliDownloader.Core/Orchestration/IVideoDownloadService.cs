@@ -39,8 +39,12 @@ public sealed class TaskStateChangedEventArgs : EventArgs
 /// </summary>
 public interface IVideoDownloadService
 {
-    /// <summary>预览：解析链接 + 取元数据 + 探测可用画质（不保留任何直链）。</summary>
-    Task<VideoInfo> ProbeAsync(string rawInput, CancellationToken ct = default);
+    /// <summary>
+    /// 预览：解析链接 + 取元数据 + 探测可用画质（不保留任何直链）。
+    /// <paramref name="preferredCodec"/> 来自设置里的默认编码（AVC / HEVC / AV1），
+    /// 决定同一清晰度有多路流时下拉里保留哪一路。
+    /// </summary>
+    Task<VideoInfo> ProbeAsync(string rawInput, string? preferredCodec = null, CancellationToken ct = default);
 
     VideoTask Enqueue(DownloadRequest request);
     void Pause(string taskId);

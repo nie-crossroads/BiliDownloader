@@ -67,7 +67,7 @@ public partial class SettingsViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsAboutPane))]
     [NotifyPropertyChangedFor(nameof(PaneTitle))]
     [NotifyPropertyChangedFor(nameof(PaneDescription))]
-    private string _selectedPane = "download";
+    private string _selectedPane = "basic";
 
     public bool IsDownloadPane => SelectedPane == "download";
     public bool IsBasicPane => SelectedPane == "basic";
@@ -93,7 +93,7 @@ public partial class SettingsViewModel : ObservableObject
         _ => "改动立即生效。并发与连接数调高会更快，但更容易触发风控。"
     };
 
-    [RelayCommand] private void SelectPane(string? pane) => SelectedPane = pane ?? "download";
+    [RelayCommand] private void SelectPane(string? pane) => SelectedPane = pane ?? "basic";
 
     // ------------------------------------------------------------ 下载
 
