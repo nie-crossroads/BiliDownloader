@@ -67,7 +67,7 @@ internal static class DiagnosticsShot
         await Task.Delay(900);
 
         await Shot(window, dir, "01-empty-light.png", report);
-        report.AppendLine($"tasks={vm.TaskCount} hasPreview={vm.HasPreview} log={vm.LogCount} loggedIn={vm.IsLoggedIn}");
+        report.AppendLine($"tasks={vm.Queue.TaskCount} hasPreview={vm.HasPreview} log={vm.LogCount} loggedIn={vm.Account.IsLoggedIn}");
 
         // --theme=Dark 时整轮取证都留在深色里：后面几张（层叠卡背等）也要能在深色下看清。
         var keepTheme = ArgValue(args, "--theme");
@@ -112,7 +112,7 @@ internal static class DiagnosticsShot
                 await Task.Delay(1200);
                 await Shot(window, dir, "04-downloading.png", report);
 
-                if (args.Contains("--pause-resume") && vm.Tasks.FirstOrDefault() is { CanPause: true } paused)
+                if (args.Contains("--pause-resume") && vm.Queue.Tasks.FirstOrDefault() is { CanPause: true } paused)
                 {
                     var service = ((App)Application.Current).Services.GetRequiredService<IVideoDownloadService>();
                     paused.PauseCommand.Execute(null);
@@ -133,7 +133,7 @@ internal static class DiagnosticsShot
                     await Task.Delay(3000);
                     await Shot(window, dir, "04b-downloading-progress.png", report);
 
-                    var item = vm.Tasks.FirstOrDefault();
+                    var item = vm.Queue.Tasks.FirstOrDefault();
                     report.AppendLine($"before cancel     : [{item?.StatusText}] {item?.ProgressText}");
                     item?.CancelCommand.Execute(null);
                     await Task.Delay(1500);
@@ -144,14 +144,14 @@ internal static class DiagnosticsShot
                 {
                     while (DateTime.UtcNow - started < TimeSpan.FromSeconds(75))
                     {
-                        var first = vm.Tasks.FirstOrDefault();
+                        var first = vm.Queue.Tasks.FirstOrDefault();
                         if (first is { CanPause: false, CanResume: false } && first.StatusKind is TaskStatusKind.Done or TaskStatusKind.Failed)
                             break;
                         await Task.Delay(500);
                     }
 
                     await Shot(window, dir, "05-finished.png", report);
-                    foreach (var t in vm.Tasks)
+                    foreach (var t in vm.Queue.Tasks)
                         report.AppendLine($"task              : [{t.StatusText}] {t.ProgressText}  {t.MetaText}  speed={t.SpeedText}  metaErr={t.MetaIsError}  {t.Title}");
                 }
             }
@@ -199,10 +199,10 @@ internal static class DiagnosticsShot
 
         if (args.Contains("--modals"))
         {
-            vm.ShowCookieCommand.Execute(null);
+            vm.Account.ShowCookieCommand.Execute(null);
             await Task.Delay(500);
             await Shot(window, dir, "09-cookie.png", report);
-            vm.CloseCookieCommand.Execute(null);
+            vm.Account.CloseCookieCommand.Execute(null);
             await Task.Delay(300);
         }
 
@@ -210,7 +210,7 @@ internal static class DiagnosticsShot
         {
             // 离线造多 P 任务行：验证层叠卡背的层数与「完成一集后卡背向前滚」的位移量。
             var (fakeTask, item) = BuildFakeTask(stackPages);
-            vm.Tasks.Insert(0, item);
+            vm.Queue.Tasks.Insert(0, item);
             await Task.Delay(600);
             await Shot(window, dir, $"20-task-stack-{stackPages}p.png", report);
             report.AppendLine($"stack {stackPages}p        : depth={item.StackDepth} second={item.HasSecondCard} third={item.HasThirdCard} peek={item.GhostPeekNear:0.#}/{item.GhostPeekFar:0.#} meta=[{item.MetaText}]");

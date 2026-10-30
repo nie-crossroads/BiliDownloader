@@ -66,7 +66,7 @@ public partial class MainWindow : Window
             break;
         }
 
-        _viewModel.ShowCookieCommand.Execute(null);
+        _viewModel.Account.ShowCookieCommand.Execute(null);
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)

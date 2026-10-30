@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using BiliDownloader.Core.BiliApi;
 using BiliDownloader.Core.Download;
+using BiliDownloader.Core.Storage;
 using BiliDownloader.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -106,7 +107,12 @@ public partial class SettingsViewModel : ObservableObject
     public string SaveDirectory
     {
         get => _settings.SaveDirectory;
-        set => Edit(() => _settings.SaveDirectory = value);
+        set
+        {
+            Edit(() => _settings.SaveDirectory = value);
+            // 清单与临时目录跟随保存目录，改了要重算「配置文件与日志」里的路径。
+            OnPropertyChanged(nameof(ConfigEntries));
+        }
     }
 
     private readonly List<OptionItem> _nameTemplates =
@@ -262,8 +268,54 @@ public partial class SettingsViewModel : ObservableObject
         set => Edit(() => _settings.Language = value);
     }
 
-    public string ConfigPathText => AppSettings.FilePath;
+    /// <summary>
+    /// 设置页「配置文件与日志」列出的全部路径：设置、加密凭据、日志目录、
+    /// 下载任务清单（manifest）与临时目录。清单与临时目录跟随「保存目录」，
+    /// 改了保存目录要重算，所以在 SaveDirectory 与恢复默认时一并通知。
+    /// </summary>
+    public IReadOnlyList<ConfigEntry> ConfigEntries => BuildConfigEntries();
+
+    private IReadOnlyList<ConfigEntry> BuildConfigEntries()
+    {
+        var appDataDir = Path.GetDirectoryName(AppSettings.FilePath)!;
+        var localAppDataDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BiliDownloader");
+        var tempRoot = StoragePaths.TempRoot(_settings.SaveDirectory);
+
+        return
+        [
+            new ConfigEntry("设置文件", AppSettings.FilePath,
+                "全部设置项（保存目录、画质、并发、代理、主题等），改动即时写入；重装程序不会丢。"),
+            new ConfigEntry("登录凭据", Path.Combine(localAppDataDir, "credential.dat"),
+                "Windows DPAPI 加密的登录态，重启后自动恢复登录；删除该文件即退出登录。"),
+            new ConfigEntry("运行与崩溃日志", Path.Combine(appDataDir, "logs"),
+                "运行日志按时间滚动，出问题时可在此打包；记录级别可在「关于与诊断」调整。"),
+            new ConfigEntry("下载任务清单", Path.Combine(tempRoot, "manifest.json"),
+                "未完成任务清单（参数、进度、流指纹），重启后用于续传；无未完成任务时该文件不存在。"),
+            new ConfigEntry("下载临时目录", tempRoot,
+                "下载中的分片与合并临时文件，完成后自动清理；异常退出可能残留，可手动删除。"),
+        ];
+    }
+
+    /// <summary>日志目录（「关于与诊断」的「打开目录」按钮也用它）。</summary>
     public string LogDirText => Path.Combine(Path.GetDirectoryName(AppSettings.FilePath)!, "logs");
+
+    /// <summary>表格行：名称 + 路径 + 作用说明。</summary>
+    public sealed record ConfigEntry(string Label, string Location, string Description);
+
+    [RelayCommand]
+    private void CopyPath(string? path)
+    {
+        if (string.IsNullOrEmpty(path)) return;
+        try
+        {
+            System.Windows.Clipboard.SetText(path);
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.ExternalException or UnauthorizedAccessException)
+        {
+            // 剪贴板被别的程序占用时静默失败，不影响设置页
+        }
+    }
 
     // ------------------------------------------------------------ 网络
 
@@ -521,7 +573,7 @@ public partial class SettingsViewModel : ObservableObject
                      nameof(RequestTimeoutSeconds), nameof(MaxRetries), nameof(AutoFallbackEndpoint),
                      nameof(ShowThumbnails), nameof(FadeCompletedProgress), nameof(ReduceMotion),
                      nameof(AccentColor),
-                     nameof(LogLevel), nameof(IsProxyManual)
+                     nameof(LogLevel), nameof(IsProxyManual), nameof(ConfigEntries)
                  })
         {
             OnPropertyChanged(name);

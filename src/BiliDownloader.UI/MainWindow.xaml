@@ -332,19 +332,19 @@
                         <Style TargetType="Border">
                             <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsLoggedIn}" Value="True">
+                                <DataTrigger Binding="{Binding Account.IsLoggedIn}" Value="True">
                                     <Setter Property="BorderBrush" Value="{DynamicResource AccentSoftBrush}" />
                                     <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
-                    <TextBlock Text="{Binding LoginTagText}" FontSize="11" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Account.LoginTagText}" FontSize="11" VerticalAlignment="Center">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Foreground" Value="{DynamicResource Fg3Brush}" />
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsLoggedIn}" Value="True">
+                                    <DataTrigger Binding="{Binding Account.IsLoggedIn}" Value="True">
                                         <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -357,8 +357,8 @@
                             Margin="0,0,6,0">
                     <Button x:Name="LoginButton" Height="26" Padding="10,0" Cursor="Hand"
                             FocusVisualStyle="{x:Null}"
-                            Command="{Binding ShowLoginCommand}"
-                            Visibility="{Binding IsLoggedIn, Converter={StaticResource InverseBoolToVisibility}}"
+                            Command="{Binding Account.ShowLoginCommand}"
+                            Visibility="{Binding Account.IsLoggedIn, Converter={StaticResource InverseBoolToVisibility}}"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
@@ -385,9 +385,9 @@
                     </Button>
 
                     <Button x:Name="AvatarButton" Padding="3" Cursor="Hand" FocusVisualStyle="{x:Null}"
-                            Command="{Binding ToggleAccountMenuCommand}"
+                            Command="{Binding Account.ToggleAccountMenuCommand}"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True"
-                            Visibility="{Binding IsLoggedIn, Converter={StaticResource BoolToVisibility}}">
+                            Visibility="{Binding Account.IsLoggedIn, Converter={StaticResource BoolToVisibility}}">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="Shell" CornerRadius="{StaticResource CornerFull}"
@@ -395,12 +395,12 @@
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                         <Grid Width="24" Height="24">
                                             <Ellipse Fill="{DynamicResource AvatarGradientBrush}" />
-                                            <TextBlock Text="{Binding UserInitial}" FontSize="11" FontWeight="SemiBold"
+                                            <TextBlock Text="{Binding Account.UserInitial}" FontSize="11" FontWeight="SemiBold"
                                                        Foreground="#FFFFFF" HorizontalAlignment="Center"
                                                        VerticalAlignment="Center" />
                                             <Ellipse ClipToBounds="True">
                                                 <Ellipse.Fill>
-                                                    <ImageBrush ImageSource="{Binding AvatarImage}" Stretch="UniformToFill" />
+                                                    <ImageBrush ImageSource="{Binding Account.AvatarImage}" Stretch="UniformToFill" />
                                                 </Ellipse.Fill>
                                             </Ellipse>
                                         </Grid>
@@ -419,10 +419,10 @@
                         </Button.Template>
                     </Button>
 
-                    <Popup IsOpen="{Binding IsAccountMenuOpen, Mode=TwoWay}" StaysOpen="False"
+                    <Popup IsOpen="{Binding Account.IsAccountMenuOpen, Mode=TwoWay}" StaysOpen="False"
                            PlacementTarget="{Binding ElementName=AvatarButton}" Placement="Bottom"
                            HorizontalOffset="-150" VerticalOffset="8" AllowsTransparency="True"
-                           PopupAnimation="{Binding PopupAnimation}">
+                           PopupAnimation="{Binding Queue.PopupAnimation}">
                         <Border Width="236" Padding="6" Margin="0,0,8,8"
                                 Background="{DynamicResource SurfaceBrush}"
                                 BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"
@@ -438,26 +438,26 @@
                                     </Grid.ColumnDefinitions>
                                     <Grid Width="34" Height="34">
                                         <Ellipse Fill="{DynamicResource AvatarGradientBrush}" />
-                                        <TextBlock Text="{Binding UserInitial}" FontSize="13" FontWeight="SemiBold"
+                                        <TextBlock Text="{Binding Account.UserInitial}" FontSize="13" FontWeight="SemiBold"
                                                    Foreground="#FFFFFF" HorizontalAlignment="Center"
                                                    VerticalAlignment="Center" />
                                         <Ellipse ClipToBounds="True">
                                             <Ellipse.Fill>
-                                                <ImageBrush ImageSource="{Binding AvatarImage}" Stretch="UniformToFill" />
+                                                <ImageBrush ImageSource="{Binding Account.AvatarImage}" Stretch="UniformToFill" />
                                             </Ellipse.Fill>
                                         </Ellipse>
                                     </Grid>
                                     <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding UserName}" FontSize="12.5" FontWeight="SemiBold"
+                                        <TextBlock Text="{Binding Account.UserName}" FontSize="12.5" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource FgBrush}" />
-                                        <TextBlock Text="{Binding UserUidText}" Style="{StaticResource MicroText}"
+                                        <TextBlock Text="{Binding Account.UserUidText}" Style="{StaticResource MicroText}"
                                                    Margin="0,1,0,0" Typography.NumeralAlignment="Tabular" />
                                     </StackPanel>
                                 </Grid>
 
                                 <StackPanel Orientation="Horizontal" Margin="8,0,8,10">
                                     <Border CornerRadius="3" Padding="5,1" Background="{DynamicResource AccentSoftBrush}"
-                                            Visibility="{Binding IsVip, Converter={StaticResource BoolToVisibility}}">
+                                            Visibility="{Binding Account.IsVip, Converter={StaticResource BoolToVisibility}}">
                                         <TextBlock Text="大会员" FontSize="10" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource AccentInkBrush}" />
                                     </Border>
@@ -467,9 +467,9 @@
 
                                 <Border Height="1" Background="{DynamicResource LineBrush}" Margin="4,0,4,4" />
                                 <Button Style="{StaticResource MenuButton}" Content="切换账号"
-                                        Command="{Binding ShowLoginCommand}" />
+                                        Command="{Binding Account.ShowLoginCommand}" />
                                 <Button Style="{StaticResource MenuDangerButton}" Content="退出登录"
-                                        Command="{Binding LogoutCommand}" />
+                                        Command="{Binding Account.LogoutCommand}" />
                                 <TextBlock Text="登录凭证只保存在本机" Style="{StaticResource MicroText}"
                                            Margin="8,8,8,4" />
                             </StackPanel>
@@ -728,15 +728,15 @@
                             Background="{DynamicResource Surface2Brush}"
                             BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"
                             VerticalAlignment="Center">
-                        <TextBlock Text="{Binding TaskCount}" FontSize="10.5" Foreground="{DynamicResource Fg2Brush}"
+                        <TextBlock Text="{Binding Queue.TaskCount}" FontSize="10.5" Foreground="{DynamicResource Fg2Brush}"
                                    Typography.NumeralAlignment="Tabular" />
                     </Border>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Style="{StaticResource GhostButton}" Content="{Binding PauseAllText}"
-                            Command="{Binding TogglePauseAllCommand}" />
+                            Command="{Binding Queue.TogglePauseAllCommand}" />
                     <Button Style="{StaticResource GhostButton}" Content="清空已完成" Margin="2,0,0,0"
-                            Command="{Binding ClearCompletedCommand}" />
+                            Command="{Binding Queue.ClearCompletedCommand}" />
                 </StackPanel>
             </Grid>
 
@@ -744,12 +744,12 @@
             <Grid Grid.Row="4" Margin="0,8,0,0">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Padding="0,0,6,0"
-                              Visibility="{Binding HasTasks, Converter={StaticResource BoolToVisibility}}">
-                    <ItemsControl ItemsSource="{Binding Tasks}" ItemTemplate="{StaticResource TaskItemTemplate}" />
+                              Visibility="{Binding Queue.HasTasks, Converter={StaticResource BoolToVisibility}}">
+                    <ItemsControl ItemsSource="{Binding Queue.Tasks}" ItemTemplate="{StaticResource TaskItemTemplate}" />
                 </ScrollViewer>
 
                 <Grid Height="96" VerticalAlignment="Center"
-                      Visibility="{Binding HasTasks, Converter={StaticResource InverseBoolToVisibility}}">
+                      Visibility="{Binding Queue.HasTasks, Converter={StaticResource InverseBoolToVisibility}}">
                     <Rectangle RadiusX="10" RadiusY="10" Stroke="{DynamicResource LineBrush}"
                                StrokeThickness="1" StrokeDashArray="4 3" />
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
@@ -768,7 +768,7 @@
 
         <!-- ============================================================ 扫码登录 -->
         <Border Grid.RowSpan="2" Background="{DynamicResource OverlayBrush}"
-                Visibility="{Binding IsQrOpen, Converter={StaticResource BoolToVisibility}}">
+                Visibility="{Binding Account.IsQrOpen, Converter={StaticResource BoolToVisibility}}">
             <Border Width="340" Padding="20,20,20,16" CornerRadius="16"
                     Background="{DynamicResource SurfaceBrush}"
                     BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"
@@ -785,7 +785,7 @@
 
                     <Button Style="{StaticResource IconButton}" Width="26" Height="26"
                             HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,-6,0"
-                            Command="{Binding CloseQrCommand}" ToolTip="关闭">
+                            Command="{Binding Account.CloseQrCommand}" ToolTip="关闭">
                         <Path Data="{StaticResource IconClose}" Width="10" Height="10" Stretch="Uniform"
                               Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                               StrokeThickness="1.2" />
@@ -801,37 +801,37 @@
                     <Border Grid.Row="1" Width="184" Height="184" Margin="0,14,0,0" Padding="8"
                             Background="#FFFFFF" CornerRadius="12" HorizontalAlignment="Center">
                         <Grid>
-                            <Image Source="{Binding QrImage}" Width="168" Height="168" Stretch="Fill"
+                            <Image Source="{Binding Account.QrImage}" Width="168" Height="168" Stretch="Fill"
                                    RenderOptions.BitmapScalingMode="NearestNeighbor" />
                             <Border Background="#FAFFFFFF" CornerRadius="10"
-                                    Visibility="{Binding QrMaskVisible, Converter={StaticResource BoolToVisibility}}">
+                                    Visibility="{Binding Account.QrMaskVisible, Converter={StaticResource BoolToVisibility}}">
                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                    <Path Data="{Binding QrMaskIcon}" Width="26" Height="26" Stretch="Uniform"
+                                    <Path Data="{Binding Account.QrMaskIcon}" Width="26" Height="26" Stretch="Uniform"
                                           StrokeThickness="1.6" HorizontalAlignment="Center">
                                         <Path.Style>
                                             <Style TargetType="Path">
                                                 <Setter Property="Stroke" Value="#15181D" />
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding QrIsSuccess}" Value="True">
+                                                    <DataTrigger Binding="{Binding Account.QrIsSuccess}" Value="True">
                                                         <Setter Property="Stroke" Value="#0FA97C" />
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </Path.Style>
                                     </Path>
-                                    <TextBlock Text="{Binding QrMaskText}" FontSize="11.5" FontWeight="Medium"
+                                    <TextBlock Text="{Binding Account.QrMaskText}" FontSize="11.5" FontWeight="Medium"
                                                Foreground="#15181D" TextAlignment="Center" TextWrapping="Wrap"
                                                MaxWidth="150" Margin="0,9,0,0" HorizontalAlignment="Center" />
                                     <Button Content="重新获取" Style="{StaticResource PrimaryButtonSmall}"
                                             Height="30" Margin="0,10,0,0" Padding="12,0"
-                                            Command="{Binding RefreshQrCommand}"
-                                            Visibility="{Binding QrShowRefresh, Converter={StaticResource BoolToVisibility}}" />
+                                            Command="{Binding Account.RefreshQrCommand}"
+                                            Visibility="{Binding Account.QrShowRefresh, Converter={StaticResource BoolToVisibility}}" />
                                 </StackPanel>
                             </Border>
                         </Grid>
                     </Border>
 
-                    <TextBlock Grid.Row="2" Text="{Binding QrHintText}" Style="{StaticResource MicroText}"
+                    <TextBlock Grid.Row="2" Text="{Binding Account.QrHintText}" Style="{StaticResource MicroText}"
                                HorizontalAlignment="Center" Margin="0,10,0,0"
                                Typography.NumeralAlignment="Tabular" />
 
@@ -849,7 +849,7 @@
                     </Grid>
 
                     <Button Grid.Row="4" Style="{StaticResource SecondaryButton}" Height="32"
-                            Content="手动粘贴 Cookie" Command="{Binding ShowCookieCommand}"
+                            Content="手动粘贴 Cookie" Command="{Binding Account.ShowCookieCommand}"
                             HorizontalAlignment="Stretch" />
 
                     <TextBlock Grid.Row="5" Text="登录凭证只保存在本机，不上传任何服务器"
@@ -919,7 +919,7 @@
 
         <!-- ============================================================ 粘贴 Cookie -->
         <Border Grid.RowSpan="2" Background="{DynamicResource OverlayBrush}"
-                Visibility="{Binding IsCookieOpen, Converter={StaticResource BoolToVisibility}}">
+                Visibility="{Binding Account.IsCookieOpen, Converter={StaticResource BoolToVisibility}}">
             <Border Width="468" Padding="20" CornerRadius="16"
                     Background="{DynamicResource SurfaceBrush}"
                     BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"
@@ -951,17 +951,17 @@
                         <TextBox Style="{StaticResource BareTextBox}" AcceptsReturn="True" TextWrapping="Wrap"
                                  VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto"
                                  ctl:Field.Placeholder="SESSDATA=xxx%2Cxxx; bili_jct=xxx; ..."
-                                 Text="{Binding CookieText, UpdateSourceTrigger=PropertyChanged}" />
+                                 Text="{Binding Account.CookieText, UpdateSourceTrigger=PropertyChanged}" />
                     </Border>
 
-                    <TextBlock Text="{Binding CookieError}" FontSize="11.5" Margin="0,6,0,0"
+                    <TextBlock Text="{Binding Account.CookieError}" FontSize="11.5" Margin="0,6,0,0"
                                Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" />
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
                         <Button Style="{StaticResource SecondaryButton}" Content="取消"
-                                Command="{Binding CloseCookieCommand}" />
+                                Command="{Binding Account.CloseCookieCommand}" />
                         <Button Style="{StaticResource PrimaryButtonSmall}" Content="保存并验证" Margin="8,0,0,0"
-                                Command="{Binding SubmitCookieCommand}" />
+                                Command="{Binding Account.SubmitCookieCommand}" />
                     </StackPanel>
                 </StackPanel>
             </Border>

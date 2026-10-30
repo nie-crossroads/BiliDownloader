@@ -386,17 +386,36 @@
                                           SelectedValuePath="Value" SelectedValue="{Binding Language, Mode=TwoWay}" />
                             </Grid>
 
-                            <TextBlock Text="配置文件与日志" Style="{StaticResource RowTitle}" />
-                            <TextBlock Text="设置和日志分开存放，重装程序不会丢设置" Style="{StaticResource RowDesc}" />
-                            <Border Margin="0,8,0,4" Padding="10,8" CornerRadius="{StaticResource CornerSm}"
-                                    Background="{DynamicResource Surface2Brush}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource MonoText}" Text="{Binding ConfigPathText, Mode=OneWay}"
-                                               TextTrimming="CharacterEllipsis" FontSize="11" />
-                                    <TextBlock Style="{StaticResource MonoText}" Text="{Binding LogDirText, Mode=OneWay}"
-                                               TextTrimming="CharacterEllipsis" FontSize="11" Margin="0,4,0,0" />
-                                </StackPanel>
-                            </Border>
+                            <TextBlock Text="配置文件与日志" Style="{StaticResource GroupHead}" />
+
+                            <TextBlock Text="该应用写入的全部配置与日志路径。点路径即可用鼠标选中复制，或点右侧「复制」按钮。"
+                                       Style="{StaticResource RowDesc}" Margin="0,0,0,8" />
+
+                            <ItemsControl ItemsSource="{Binding ConfigEntries}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,0,0,10">
+                                            <Grid>
+                                                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource FgBrush}" VerticalAlignment="Center" />
+                                                <Button Style="{StaticResource GhostButton}" Content="复制"
+                                                        Height="26" Padding="10,0" FontSize="11"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                        Command="{Binding DataContext.CopyPathCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        CommandParameter="{Binding Location}" />
+                                            </Grid>
+                                            <TextBlock Text="{Binding Description}" FontSize="11"
+                                                       Foreground="{DynamicResource Fg3Brush}" TextWrapping="Wrap"
+                                                       Margin="0,3,0,5" />
+                                            <TextBox Style="{StaticResource FieldTextBox}"
+                                                     Text="{Binding Location, Mode=OneWay}"
+                                                     IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                                                     TextWrapping="Wrap" Height="Auto" VerticalContentAlignment="Top"
+                                                     FontFamily="Cascadia Mono, Consolas, Microsoft YaHei UI" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
                             <TextBlock Text="快捷键" Style="{StaticResource GroupHead}" />
                             <TextBlock Style="{StaticResource RowDesc}" Margin="0,0,0,6"
