@@ -231,7 +231,7 @@ public sealed class BiliApiClient : IBiliApiClient
             // B 站改字段 / 返回 HTML 拦截页
             throw new BiliException(ErrorKind.Network, "接口返回异常，请稍后重试", ex);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException)
         {
             throw BiliException.Network(ex);
         }

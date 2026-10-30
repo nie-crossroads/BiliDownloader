@@ -58,8 +58,8 @@ public sealed class BiliException : Exception
     {
         BiliException bili => bili,
         UnauthorizedAccessException => NoPermission(ex),
-        IOException io when (uint)io.HResult == 0x70 => DiskFull(ex),
-        IOException io when (uint)io.HResult == 0x27 => DiskFull(ex),
+        PathTooLongException => new(ErrorKind.PathTooLong, "文件路径过长，请缩短保存路径或文件名", ex),
+        IOException io when (io.HResult & 0xFFFF) is 0x70 or 0x27 => DiskFull(ex),
         HttpRequestException => Network(ex),
         TaskCanceledException => StreamExpired(ex),
         _ => new BiliException(ErrorKind.Unknown, "下载失败，请重试", ex)

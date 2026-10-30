@@ -3,7 +3,7 @@ using BiliDownloader.Core.Models;
 
 namespace BiliDownloader.Core.Download;
 
-/// <summary>一路远程文件（主链 + 备用 CDN）。</summary>
+/// <summary>一路远程文件（主链 + 备用 CDN）。ExpectedLength 只接受已知真实长度，未知传 0，禁止传码率估算值。</summary>
 public sealed record RemoteFile(string Url, IReadOnlyList<string> BackupUrls, long ExpectedLength)
 {
     public IEnumerable<string> AllUrls()

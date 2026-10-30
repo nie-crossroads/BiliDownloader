@@ -28,6 +28,15 @@ crash-*.log
 *.part[0-9]*
 *.m4s
 *.tmp
+*.incomplete
+
+# 本地测试、端到端取证及接口调试产物
+TestResults/
+*.trx
+/artifacts/
+/架构评审.md
+/play.json
+/view.json
 
 # ---- 安装包 ----
 *.iss.bak

@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using BiliDownloader.Core.BiliApi;
 using BiliDownloader.Core.Models;
+using BiliDownloader.Core.Orchestration;
 using BiliDownloader.UI.Services;
 using BiliDownloader.UI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,6 +50,13 @@ internal static class DiagnosticsShot
         Directory.CreateDirectory(dir);
         var url = ArgValue(args, "--parse");
         var wantDownload = args.Contains("--download");
+        var saveDirectory = ArgValue(args, "--save-dir");
+        if (!string.IsNullOrWhiteSpace(saveDirectory))
+        {
+            // 只覆盖本次进程的下载位置，取证不修改用户保存的设置。
+            ((App)Application.Current).Services.GetRequiredService<AppSettings>().SaveDirectory =
+                Path.GetFullPath(saveDirectory);
+        }
 
         var report = new StringBuilder();
         report.AppendLine($"quality catalog   : {string.Join(" | ", QualityCatalog.QualityList.Select(QualityCatalog.QualityName))}");
@@ -103,6 +111,21 @@ internal static class DiagnosticsShot
                 vm.DownloadCommand.Execute(null);
                 await Task.Delay(1200);
                 await Shot(window, dir, "04-downloading.png", report);
+
+                if (args.Contains("--pause-resume") && vm.Tasks.FirstOrDefault() is { CanPause: true } paused)
+                {
+                    var service = ((App)Application.Current).Services.GetRequiredService<IVideoDownloadService>();
+                    paused.PauseCommand.Execute(null);
+                    var deadline = DateTime.UtcNow.AddSeconds(10);
+                    while (service.IsRunning(paused.TaskId) && DateTime.UtcNow < deadline)
+                        await Task.Delay(100);
+                    if (service.IsRunning(paused.TaskId)) throw new TimeoutException("暂停未在 10 秒内结束");
+                    await Shot(window, dir, "04b-paused.png", report);
+                    report.AppendLine($"paused            : [{paused.StatusText}] {paused.ProgressText}");
+                    paused.ResumeCommand.Execute(null);
+                    await Task.Delay(1000);
+                    report.AppendLine($"resumed           : [{paused.StatusText}] {paused.ProgressText}");
+                }
 
                 if (args.Contains("--cancel"))
                 {

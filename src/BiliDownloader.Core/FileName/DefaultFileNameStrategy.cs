@@ -48,7 +48,20 @@ public sealed class DefaultFileNameStrategy : IFileNameStrategy
         while (cleaned.Contains("__"))
             cleaned = cleaned.Replace("__", "_");
 
-        return cleaned.Length > MaxLength ? cleaned[..MaxLength].TrimEnd('_', '.') : cleaned;
+        if (cleaned.Length > MaxLength) cleaned = cleaned[..MaxLength];
+        cleaned = cleaned.TrimEnd(' ', '_', '.');
+        if (cleaned.Length == 0) return "未命名";
+
+        var stem = cleaned.Split('.')[0].TrimEnd(' ');
+        if (stem.Equals("CON", StringComparison.OrdinalIgnoreCase) ||
+            stem.Equals("PRN", StringComparison.OrdinalIgnoreCase) ||
+            stem.Equals("AUX", StringComparison.OrdinalIgnoreCase) ||
+            stem.Equals("NUL", StringComparison.OrdinalIgnoreCase) ||
+            (stem.Length == 4 && stem[3] is >= '1' and <= '9' &&
+             (stem.StartsWith("COM", StringComparison.OrdinalIgnoreCase) ||
+              stem.StartsWith("LPT", StringComparison.OrdinalIgnoreCase))))
+            cleaned = "_" + cleaned;
+        return cleaned;
     }
 
     private static bool IsInvalid(char c)

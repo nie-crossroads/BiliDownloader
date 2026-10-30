@@ -60,9 +60,9 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
             throw new BiliException(ErrorKind.Unknown, "未能识别 B 站链接，请检查粘贴内容");
 
         var info = await _api.GetVideoInfoAsync(id, ct).ConfigureAwait(false);
+        EnsureSupported(info);
 
-        // 付费 / 充电专属：直接返回，允许 UI 提示，不探直链
-        if (info.IsPaidContent || info.Pages.Count == 0)
+        if (info.Pages.Count == 0)
             return info with { SelectedPage = parsed.Page };
 
         // 探测可用画质：只用接口返回的流做「可用性」判断，不保存任何直链（§7.5）
@@ -86,6 +86,7 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
     public VideoTask Enqueue(DownloadRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (request.Cids.Count == 0)
             throw new ArgumentException("至少选择一个分 P", nameof(request));
 
@@ -98,7 +99,7 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
             Duration = request.Duration,
             SaveDirectory = request.SaveDirectory,
             TotalPages = Math.Max(1, request.TotalPages),
-            Pages = request.Cids.Select((cid, i) => new TaskPageItem
+            Pages = request.Cids.Distinct().Select((cid, i) => new TaskPageItem
             {
                 Cid = cid,
                 Index = i + 1,
@@ -220,6 +221,7 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
 
             SetTaskStatus(rt, DownloadStatus.FetchingInfo);
             var info = await _api.GetVideoInfoAsync(task.Bvid, ct).ConfigureAwait(false);
+            EnsureSupported(info);
 
             foreach (var page in task.Pages)
             {
@@ -316,7 +318,7 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
         var duration = page.Duration > TimeSpan.Zero ? page.Duration : play.Duration;
         if (page.Duration <= TimeSpan.Zero) page.Duration = duration;
 
-        var tempDir = StoragePaths.PageTempDir(task.SaveDirectory, task.Bvid, page.Cid);
+        var tempDir = StoragePaths.PageTempDir(task.SaveDirectory, task.TaskId, page.Cid);
         page.TempDir = tempDir;
         Directory.CreateDirectory(tempDir);
         StoragePaths.TryHideTempRoot(task.SaveDirectory);
@@ -341,7 +343,7 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
         });
 
         var videoResult = await _downloader.DownloadAsync(
-            new RemoteFile(video.BaseUrl, video.BackupUrls, videoLen),
+            new RemoteFile(video.BaseUrl, video.BackupUrls, video.ContentLength ?? 0),
             videoPath, new DownloadOptions(), videoProgress, ct).ConfigureAwait(false);
         videoLen = videoResult.Bytes;
 
@@ -357,7 +359,7 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
             });
 
             var audioResult = await _downloader.DownloadAsync(
-                new RemoteFile(audio.BaseUrl, audio.BackupUrls, audioLen),
+                new RemoteFile(audio.BaseUrl, audio.BackupUrls, audio.ContentLength ?? 0),
                 audioPath, new DownloadOptions(), audioProgress, ct).ConfigureAwait(false);
             audioLen = audioResult.Bytes;
         }
@@ -423,8 +425,10 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
         foreach (var page in rt.Task.Pages.Where(p => !p.Status.IsTerminal()))
         {
             page.Status = DownloadStatus.Canceled;
-            if (!rt.KeepTemp) StoragePaths.TryDeleteDirectory(page.TempDir);
         }
+        if (!rt.KeepTemp)
+            foreach (var page in rt.Task.Pages)
+                StoragePaths.TryDeleteDirectory(page.TempDir);
 
         rt.Task.FinishedAt = DateTimeOffset.Now;
         SetTaskStatus(rt, DownloadStatus.Canceled);
@@ -517,6 +521,14 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
     {
         if (bandwidthBps <= 0 || duration <= TimeSpan.Zero) return 0;
         return (long)(bandwidthBps * duration.TotalSeconds / 8);
+    }
+
+    private static void EnsureSupported(VideoInfo info)
+    {
+        if (info.IsPaidContent)
+            throw new BiliException(ErrorKind.PaidContent, "付费 / 充电专属内容暂不支持下载");
+        if (info.HasUgcSeason)
+            throw new BiliException(ErrorKind.VideoUnavailable, "合集内容暂不支持下载");
     }
 
     private static long SpeedMeasured(bool exists, string path, long length) =>

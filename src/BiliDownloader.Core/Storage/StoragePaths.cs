@@ -20,8 +20,8 @@ public static class StoragePaths
 
     public static string TempRoot(string saveDirectory) => Path.Combine(saveDirectory, ".bilitmp");
 
-    public static string PageTempDir(string saveDirectory, string bvid, long cid) =>
-        Path.Combine(TempRoot(saveDirectory), $"{bvid}-{cid}");
+    public static string PageTempDir(string saveDirectory, string taskId, long cid) =>
+        Path.Combine(TempRoot(saveDirectory), $"{taskId}-{cid}");
 
     /// <summary>把 .bilitmp 标记为隐藏（失败不影响下载）。</summary>
     public static void TryHideTempRoot(string saveDirectory)
@@ -41,7 +41,7 @@ public static class StoragePaths
     }
 
     /// <summary>
-    /// 原子落盘：同卷 Move；跨卷先复制成 .incomplete 再改名。
+    /// 原子落盘：先复制到目标目录的独占 .incomplete 文件，再改名。
     /// 返回最终路径。目标已存在时按 Rename 策略加 (1)(2)。
     /// </summary>
     public static string Commit(string tempFile, string targetDirectory, string fileNameWithoutExtension,
@@ -49,22 +49,31 @@ public static class StoragePaths
     {
         Directory.CreateDirectory(targetDirectory);
 
-        var finalPath = Path.Combine(targetDirectory, fileNameWithoutExtension + extension);
-        finalPath = EnsureUnique(finalPath);
-
+        var desiredPath = Path.Combine(targetDirectory, fileNameWithoutExtension + extension);
+        // 每次提交独占暂存文件，最终重命名禁止覆盖；并发同名任务也不会丢文件。
+        var staging = Path.Combine(targetDirectory, $".{Guid.NewGuid():N}.incomplete");
         try
         {
-            File.Move(tempFile, finalPath);
-            return finalPath;
+            // 保留源文件直到最终提交成功，失败时仍可重试。
+            File.Copy(tempFile, staging, overwrite: false);
+            while (true)
+            {
+                var finalPath = EnsureUnique(desiredPath);
+                try
+                {
+                    File.Move(staging, finalPath, overwrite: false);
+                    TryDelete(tempFile);
+                    return finalPath;
+                }
+                catch (IOException) when (File.Exists(finalPath))
+                {
+                    // 另一个任务抢先提交了这个名称，重新选名。
+                }
+            }
         }
-        catch (IOException)
+        finally
         {
-            // 跨卷或目标被占用：先复制到临时名再替换
-            var staging = finalPath + ".incomplete";
-            File.Copy(tempFile, staging, overwrite: true);
-            File.Move(staging, finalPath, overwrite: true);
-            TryDelete(tempFile);
-            return finalPath;
+            TryDelete(staging);
         }
     }
 
@@ -82,7 +91,7 @@ public static class StoragePaths
             if (!File.Exists(candidate)) return candidate;
         }
 
-        return Path.Combine(dir, $"{name} ({DateTime.Now:HHmmss}){ext}");
+        return Path.Combine(dir, $"{name} ({Guid.NewGuid():N}){ext}");
     }
 
     public static void TryDelete(string path)

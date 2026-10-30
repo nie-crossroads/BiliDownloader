@@ -37,7 +37,7 @@ public sealed class HttpFileDownloader : IFileDownloader
                 var contentLength = response.Content.Headers.ContentLength;
                 if (response.StatusCode == HttpStatusCode.OK && contentLength > 0) return contentLength;
             }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException)
             {
                 // 换下一个域名继续探测
             }
@@ -51,8 +51,12 @@ public sealed class HttpFileDownloader : IFileDownloader
     {
         ArgumentNullException.ThrowIfNull(file);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.ChunkSizeBytes);
+        ArgumentOutOfRangeException.ThrowIfNegative(options.MaxRetriesPerUrl);
+        ct.ThrowIfCancellationRequested();
 
-        Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(targetPath))!);
 
         var total = file.ExpectedLength > 0 ? file.ExpectedLength : await ProbeLengthAsync(file, ct).ConfigureAwait(false) ?? 0;
 
@@ -69,8 +73,9 @@ public sealed class HttpFileDownloader : IFileDownloader
         var resumed = written > 0;
         var attempts = 0;
 
-        await using var stream = new FileStream(targetPath, written > 0 ? FileMode.Append : FileMode.Create,
+        await using var stream = new FileStream(targetPath, FileMode.OpenOrCreate,
             FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true);
+        stream.Position = written;
 
         var urls = file.AllUrls().ToList();
         if (urls.Count == 0) throw BiliException.StreamExpired();
@@ -101,8 +106,8 @@ public sealed class HttpFileDownloader : IFileDownloader
 
                 if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
                 {
-                    // 请求起点已经越过真实文件尾（预估长度偏大时常见）：按已落盘字节收尾
-                    if (written > 0)
+                    // 只有服务端确认文件尾与断点一致，才能认定已经下完。
+                    if (response.Content.Headers.ContentRange?.Length == written && written > 0)
                     {
                         total = written;
                         break;
@@ -139,21 +144,26 @@ public sealed class HttpFileDownloader : IFileDownloader
                     if (written > 0)
                     {
                         stream.SetLength(0);
+                        stream.Position = 0;
                         written = 0;
+                        resumed = false;
+                        lastReportBytes = 0;
                     }
 
                     var serverTotal = response.Content.Headers.ContentLength ?? 0;
-                    if (serverTotal > 0) total = serverTotal;
+                    total = serverTotal;
                 }
                 else
                 {
                     var range = response.Content.Headers.ContentRange;
-                    if (range?.From is long start && start != written)
+                    if (response.StatusCode != HttpStatusCode.PartialContent ||
+                        range?.From != written || range.To is null || range.To < written ||
+                        !string.Equals(range.Unit, "bytes", StringComparison.OrdinalIgnoreCase))
                     {
                         // 响应区间与请求不一致：判为异常，重下该流
                         throw BiliException.StreamExpired();
                     }
-                    if (total <= 0 && range?.Length is long length) total = length;
+                    if (range.Length is long length) total = length;
                 }
 
                 await using var body = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
@@ -177,12 +187,25 @@ public sealed class HttpFileDownloader : IFileDownloader
                         lastReportBytes = written;
                     }
 
-                    if (total > 0 && written >= total) break;
                 }
 
                 await stream.FlushAsync(ct).ConfigureAwait(false);
+                if (response.StatusCode == HttpStatusCode.OK && total == 0)
+                {
+                    total = written;
+                    break;
+                }
+                if (sinceReport == 0)
+                    throw new HttpRequestException("响应未返回数据");
+                if (response.StatusCode == HttpStatusCode.PartialContent &&
+                    written != response.Content.Headers.ContentRange!.To + 1)
+                    throw BiliException.StreamExpired();
                 failures = 0;
                 progress?.Report(new DownloadProgress(written, total, written - lastReportBytes));
+            }
+            catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+            {
+                throw BiliException.Network(ex);
             }
             catch (OperationCanceledException)
             {
