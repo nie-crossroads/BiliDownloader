@@ -1,5 +1,8 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using BiliDownloader.Core.Download;
+using BiliDownloader.Core.FileName;
 using BiliDownloader.Core.Storage;
 
 namespace BiliDownloader.UI.Services;
@@ -100,6 +103,51 @@ public sealed class AppSettings
 
     /// <summary>Debug / Info / Warn / Error。</summary>
     public string LogLevel { get; set; } = "Info";
+
+    // ---------------------------------------------------------------- 映射到 Core
+
+    // 下面几个是「字符串设置 → Core 枚举」的派生属性，必须标 JsonIgnore：
+    // 否则 Save() 会把它们一起写进 settings.json，配置文件里混进一堆派生字段。
+    // 另外 ExistingFileAction / ProxyMode 的类型名和本类的字符串属性重名，
+    // 所以 Core 侧的类型一律写全名，避免编译器把类型解析成同名属性。
+
+    /// <summary>设置里的命名规则字符串 → Core 命名规则枚举。</summary>
+    [JsonIgnore]
+    public FileNameRule NameRule => FileNameTemplate switch
+    {
+        "Title" => FileNameRule.PlainTitle,
+        "TitleUp" => FileNameRule.WithUpName,
+        _ => FileNameRule.IndexAndPart
+    };
+
+    /// <summary>设置里的同名处理字符串 → Core 落盘策略枚举。</summary>
+    [JsonIgnore]
+    public BiliDownloader.Core.Storage.ExistingFileAction ExistingFilePolicy => ExistingFileAction switch
+    {
+        "Skip" => BiliDownloader.Core.Storage.ExistingFileAction.Skip,
+        "Overwrite" => BiliDownloader.Core.Storage.ExistingFileAction.Overwrite,
+        _ => BiliDownloader.Core.Storage.ExistingFileAction.Rename
+    };
+
+    /// <summary>设置里的代理模式字符串 → Core 代理枚举。</summary>
+    [JsonIgnore]
+    public BiliDownloader.Core.Utils.ProxyMode ProxySetting => ProxyMode switch
+    {
+        "None" => BiliDownloader.Core.Utils.ProxyMode.None,
+        "Manual" => BiliDownloader.Core.Utils.ProxyMode.Manual,
+        _ => BiliDownloader.Core.Utils.ProxyMode.System
+    };
+
+    /// <summary>
+    /// 下载器参数快照：并发分片数、重试次数、是否回退备用节点都在这里定死，
+    /// 入队时随请求一起交给 Core（Core 不反向依赖 AppSettings）。
+    /// </summary>
+    [JsonIgnore]
+    public DownloadOptions DownloadPreferences => new(
+        ChunkSizeBytes: 1 << 20,
+        MaxRetriesPerUrl: MaxRetries,
+        Connections: ConnectionsPerTask,
+        AllowFallback: AutoFallbackEndpoint);
 
     public static string FilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

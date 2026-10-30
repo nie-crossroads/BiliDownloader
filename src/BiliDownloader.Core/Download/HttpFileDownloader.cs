@@ -7,17 +7,64 @@ using BiliDownloader.Core.Models;
 
 namespace BiliDownloader.Core.Download;
 
-/// <summary>HttpClient 实现的单流下载器。</summary>
+/// <summary>HttpClient 实现的下载器：顺序 Range 分片 + 可选多连接分片（方案设计 §7.3 / §8.5）。</summary>
 public sealed class HttpFileDownloader : IFileDownloader
 {
     private readonly HttpClient _http;
+    private readonly ISpeedLimiter _limiter;
 
-    public HttpFileDownloader(HttpClient http) =>
+    public HttpFileDownloader(HttpClient http, ISpeedLimiter? limiter = null)
+    {
         _http = http ?? throw new ArgumentNullException(nameof(http));
+        _limiter = limiter ?? new TokenBucketSpeedLimiter(0);
+    }
 
     public async Task<long?> ProbeLengthAsync(RemoteFile file, CancellationToken ct = default)
     {
-        foreach (var url in file.AllUrls())
+        var fingerprint = await ProbeFingerprintAsync(file, ct).ConfigureAwait(false);
+        return fingerprint?.Length;
+    }
+
+    public Task<StreamFingerprint?> ProbeFingerprintAsync(RemoteFile file, CancellationToken ct = default) =>
+        ProbeFingerprintAsync(file.AllUrls().ToList(), ct);
+
+    public async Task<DownloadResult> DownloadAsync(RemoteFile file, string targetPath, DownloadOptions options,
+        IProgress<DownloadProgress>? progress = null, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.ChunkSizeBytes);
+        ArgumentOutOfRangeException.ThrowIfNegative(options.MaxRetriesPerUrl);
+        ct.ThrowIfCancellationRequested();
+
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(targetPath))!);
+
+        var urls = EffectiveUrls(file, options);
+        var probed = file.ExpectedLength > 0 ? null : await ProbeFingerprintAsync(urls, ct).ConfigureAwait(false);
+        var total = file.ExpectedLength > 0 ? file.ExpectedLength : probed?.Length ?? 0;
+
+        // 分片必须知道总长度才能切边界；探测不到就退回顺序路径。
+        return options.Connections > 1 && total > 0
+            ? await DownloadChunkedAsync(urls, targetPath, options, total, progress, ct).ConfigureAwait(false)
+            : await DownloadSequentialAsync(urls, targetPath, options, total, progress, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>关闭「自动回退备用节点」后只保留主链，403/404 直接判为直链失效。</summary>
+    private static List<string> EffectiveUrls(RemoteFile file, DownloadOptions options)
+    {
+        var all = file.AllUrls().Where(u => !string.IsNullOrEmpty(u)).ToList();
+        if (all.Count == 0) throw BiliException.StreamExpired();
+        return options.AllowFallback ? all : [all[0]];
+    }
+
+    /// <summary>
+    /// 探测流的身份：优先 Content-Range 里的总长，其次 200 响应的 Content-Length，
+    /// 同时记下 ETag / Last-Modified 作为「是不是同一条流」的依据。
+    /// </summary>
+    private async Task<StreamFingerprint?> ProbeFingerprintAsync(IReadOnlyList<string> urls, CancellationToken ct)
+    {
+        foreach (var url in urls)
         {
             try
             {
@@ -32,10 +79,16 @@ public sealed class HttpFileDownloader : IFileDownloader
                     continue;
 
                 var range = response.Content.Headers.ContentRange;
-                if (range?.Length is long length && length > 0) return length;
+                if (range?.Length is long length && length > 0)
+                    return new StreamFingerprint(response.Headers.ETag?.Tag,
+                        response.Content.Headers.LastModified?.ToString("R"), length,
+                        StreamFingerprint.PathOf(url));
 
                 var contentLength = response.Content.Headers.ContentLength;
-                if (response.StatusCode == HttpStatusCode.OK && contentLength > 0) return contentLength;
+                if (response.StatusCode == HttpStatusCode.OK && contentLength > 0)
+                    return new StreamFingerprint(response.Headers.ETag?.Tag,
+                        response.Content.Headers.LastModified?.ToString("R"), contentLength.Value,
+                        StreamFingerprint.PathOf(url));
             }
             catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or TaskCanceledException)
             {
@@ -46,20 +99,11 @@ public sealed class HttpFileDownloader : IFileDownloader
         return null;
     }
 
-    public async Task<DownloadResult> DownloadAsync(RemoteFile file, string targetPath, DownloadOptions options,
-        IProgress<DownloadProgress>? progress = null, CancellationToken ct = default)
+    // ---------------------------------------------------------------- 顺序路径
+
+    private async Task<DownloadResult> DownloadSequentialAsync(IReadOnlyList<string> urls, string targetPath,
+        DownloadOptions options, long total, IProgress<DownloadProgress>? progress, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(file);
-        ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
-        ArgumentNullException.ThrowIfNull(options);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.ChunkSizeBytes);
-        ArgumentOutOfRangeException.ThrowIfNegative(options.MaxRetriesPerUrl);
-        ct.ThrowIfCancellationRequested();
-
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(targetPath))!);
-
-        var total = file.ExpectedLength > 0 ? file.ExpectedLength : await ProbeLengthAsync(file, ct).ConfigureAwait(false) ?? 0;
-
         var written = File.Exists(targetPath) ? new FileInfo(targetPath).Length : 0;
         if (total > 0 && written > total)
         {
@@ -76,9 +120,6 @@ public sealed class HttpFileDownloader : IFileDownloader
         await using var stream = new FileStream(targetPath, FileMode.OpenOrCreate,
             FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true);
         stream.Position = written;
-
-        var urls = file.AllUrls().ToList();
-        if (urls.Count == 0) throw BiliException.StreamExpired();
 
         var clock = Stopwatch.StartNew();
         var lastReportAt = TimeSpan.Zero;
@@ -113,26 +154,29 @@ public sealed class HttpFileDownloader : IFileDownloader
                         break;
                     }
 
-                    if (++urlIndex >= urls.Count) throw BiliException.StreamExpired();
-                    continue;
+                    if (options.AllowFallback && ++urlIndex < urls.Count) continue;
+                    throw BiliException.StreamExpired();
                 }
 
                 if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
                 {
                     // 直链过期 / 节点失效：切下一个备用域名，不原地指数退避
-                    if (++urlIndex >= urls.Count) throw BiliException.StreamExpired();
-                    continue;
+                    if (options.AllowFallback && ++urlIndex < urls.Count) continue;
+                    throw BiliException.StreamExpired();
                 }
 
                 if ((int)response.StatusCode >= 500)
                 {
                     failures++;
-                    if (++urlIndex >= urls.Count)
+                    if (options.AllowFallback && urlIndex < urls.Count - 1)
                     {
-                        if (failures > options.MaxRetriesPerUrl) throw BiliException.Network();
-                        urlIndex = 0;
-                        await Task.Delay(400 * failures, ct).ConfigureAwait(false);
+                        urlIndex++;
+                        continue;
                     }
+
+                    urlIndex = 0;
+                    if (failures > options.MaxRetriesPerUrl) throw BiliException.Network();
+                    await Task.Delay(400 * failures, ct).ConfigureAwait(false);
                     continue;
                 }
 
@@ -177,6 +221,8 @@ public sealed class HttpFileDownloader : IFileDownloader
                     written += read;
                     sinceReport += read;
 
+                    await _limiter.ConsumeAsync(read, ct).ConfigureAwait(false);
+
                     var now = clock.Elapsed;
                     if (now - lastReportAt >= TimeSpan.FromMilliseconds(200))
                     {
@@ -186,7 +232,6 @@ public sealed class HttpFileDownloader : IFileDownloader
                         lastReportAt = now;
                         lastReportBytes = written;
                     }
-
                 }
 
                 await stream.FlushAsync(ct).ConfigureAwait(false);
@@ -219,7 +264,7 @@ public sealed class HttpFileDownloader : IFileDownloader
             {
                 // 网络抖动：先切备用域名（成本最低），用完一轮后再原地退避重试
                 failures++;
-                if (urlIndex < urls.Count - 1)
+                if (options.AllowFallback && urlIndex < urls.Count - 1)
                 {
                     urlIndex++;
                     continue;
@@ -237,5 +282,265 @@ public sealed class HttpFileDownloader : IFileDownloader
             throw new BiliException(ErrorKind.StreamExpired, "下载文件长度校验失败，请重试");
 
         return new DownloadResult(written, resumed, attempts);
+    }
+
+    // ---------------------------------------------------------------- 多连接分片
+
+    /// <summary>
+    /// 多连接分片：每一片写独立的 .partN 文件，全部完成后按顺序拼回主文件。
+    /// 主文件里始终保持「从 0 开始的连续前缀」，所以中途把并发数改回 1 也不会损坏文件。
+    /// </summary>
+    private async Task<DownloadResult> DownloadChunkedAsync(IReadOnlyList<string> urls, string targetPath,
+        DownloadOptions options, long total, IProgress<DownloadProgress>? progress, CancellationToken ct)
+    {
+        var connections = Math.Clamp(options.Connections, 1, 64);
+        var chunkSize = options.ChunkSizeBytes;
+
+        var prefix = File.Exists(targetPath) ? new FileInfo(targetPath).Length : 0;
+        if (prefix > total)
+        {
+            File.Delete(targetPath);
+            prefix = 0;
+        }
+        if (prefix == total)
+        {
+            PartialFile.Cleanup(targetPath);
+            return new DownloadResult(total, true, 0);
+        }
+
+        var span = total - prefix;
+        var count = (int)Math.Min(connections, Math.Max(1, (span + chunkSize - 1) / chunkSize));
+
+        // 计划没变（总长/片数/片大小一致，且前缀没倒退）就接着用，否则旧分片作废重下。
+        var existing = PartialFile.TryReadPlan(targetPath);
+        var plan = existing is not null
+                   && existing.Total == total
+                   && existing.Count == count
+                   && existing.ChunkSize == chunkSize
+                   && existing.Prefix <= prefix
+            ? existing
+            : CreatePlan(targetPath, prefix, total, count, chunkSize);
+
+        var received = new long[plan.Count];
+        for (var i = 0; i < plan.Count; i++)
+        {
+            var expected = plan.LengthOf(i);
+            var part = PartialFile.PartPath(targetPath, i);
+            var have = File.Exists(part) ? new FileInfo(part).Length : 0;
+
+            if (have > expected)
+            {
+                // 分片比计划长：边界对不上，整片重下，绝不让多余字节被拼进主文件
+                PartialFile.TryDelete(part);
+                have = 0;
+            }
+
+            received[i] = have;
+        }
+
+        long completed = prefix + received.Sum();
+        long attempts = 0;
+        var startedAt = Stopwatch.GetTimestamp();
+
+        double AverageSpeed()
+        {
+            var elapsed = (Stopwatch.GetTimestamp() - startedAt) * 1.0 / Stopwatch.Frequency;
+            return elapsed > 0 ? Interlocked.Read(ref completed) / elapsed : 0;
+        }
+
+        async Task DownloadPartAsync(int index, CancellationToken token)
+        {
+            var part = PartialFile.PartPath(targetPath, index);
+            var length = plan.LengthOf(index);
+            var start = plan.StartOf(index);
+
+            await using var stream = new FileStream(part, FileMode.OpenOrCreate,
+                FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true);
+            stream.Position = received[index];
+
+            var urlIndex = 0;
+            var failures = 0;
+
+            // 允许切到下一个备用域名；关掉自动回退后只在主链上重试。
+            bool TryAdvance()
+            {
+                if (options.AllowFallback && urlIndex < urls.Count - 1)
+                {
+                    urlIndex++;
+                    return true;
+                }
+                return false;
+            }
+
+            while (received[index] < length)
+            {
+                token.ThrowIfCancellationRequested();
+
+                var offset = received[index];
+                var from = start + offset;
+                var to = start + length - 1;
+
+                try
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Get, urls[urlIndex]);
+                    request.Headers.Range = new RangeHeaderValue(from, to);
+
+                    using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token)
+                                                   .ConfigureAwait(false);
+                    Interlocked.Increment(ref attempts);
+
+                    if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
+                    {
+                        if (offset > 0 && response.Content.Headers.ContentRange?.Length == from)
+                        {
+                            received[index] = length;
+                            break;
+                        }
+                        if (TryAdvance()) continue;
+                        throw BiliException.StreamExpired();
+                    }
+
+                    if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
+                    {
+                        if (TryAdvance()) continue;
+                        throw BiliException.StreamExpired();
+                    }
+
+                    if ((int)response.StatusCode >= 500)
+                    {
+                        failures++;
+                        urlIndex = 0;
+                        if (failures > options.MaxRetriesPerUrl) throw BiliException.Network();
+                        await Task.Delay(400 * failures, token).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    response.EnsureSuccessStatusCode();
+
+                    if (response.StatusCode == HttpStatusCode.OK)
+                    {
+                        // 服务端忽略 Range：整片重下
+                        var dropped = received[index];
+                        stream.SetLength(0);
+                        stream.Position = 0;
+                        received[index] = 0;
+                        Interlocked.Add(ref completed, -dropped);
+                    }
+                    else
+                    {
+                        var range = response.Content.Headers.ContentRange;
+                        if (response.StatusCode != HttpStatusCode.PartialContent ||
+                            range?.From != from || range.To is null || range.To < from ||
+                            !string.Equals(range.Unit, "bytes", StringComparison.OrdinalIgnoreCase))
+                            throw BiliException.StreamExpired();
+                    }
+
+                    await using var body = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+                    var buffer = new byte[64 * 1024];
+                    var writtenHere = 0L;
+                    int read;
+
+                    while ((read = await body.ReadAsync(buffer, token).ConfigureAwait(false)) > 0)
+                    {
+                        await stream.WriteAsync(buffer.AsMemory(0, read), token).ConfigureAwait(false);
+                        received[index] += read;
+                        writtenHere += read;
+                        Interlocked.Add(ref completed, read);
+
+                        await _limiter.ConsumeAsync(read, token).ConfigureAwait(false);
+                        progress?.Report(new DownloadProgress(Interlocked.Read(ref completed), total, AverageSpeed()));
+                    }
+
+                    await stream.FlushAsync(token).ConfigureAwait(false);
+                    if (writtenHere == 0) throw new HttpRequestException("响应未返回数据");
+                    failures = 0;
+                }
+                catch (OperationCanceledException ex) when (!token.IsCancellationRequested)
+                {
+                    throw BiliException.Network(ex);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (BiliException)
+                {
+                    throw;
+                }
+                catch (Exception ex) when (ex is HttpRequestException or IOException)
+                {
+                    failures++;
+                    if (TryAdvance()) continue;
+
+                    if (failures > options.MaxRetriesPerUrl * Math.Max(1, urls.Count))
+                        throw BiliException.From(ex);
+
+                    urlIndex = 0;
+                    await Task.Delay(300 * failures, token).ConfigureAwait(false);
+                }
+            }
+        }
+
+        var pending = Enumerable.Range(0, plan.Count).Where(i => received[i] < plan.LengthOf(i)).ToArray();
+        if (pending.Length > 0)
+        {
+            await Parallel.ForEachAsync(pending,
+                new ParallelOptions { MaxDegreeOfParallelism = Math.Min(connections, pending.Length), CancellationToken = ct },
+                async (index, token) => await DownloadPartAsync(index, token).ConfigureAwait(false)).ConfigureAwait(false);
+        }
+
+        for (var i = 0; i < plan.Count; i++)
+        {
+            if (received[i] != plan.LengthOf(i))
+                throw new BiliException(ErrorKind.StreamExpired, "分片下载未完成，请重试");
+        }
+
+        await ConcatenateAsync(targetPath, plan, ct).ConfigureAwait(false);
+        PartialFile.Cleanup(targetPath);
+
+        var finalLength = new FileInfo(targetPath).Length;
+        if (finalLength != total)
+            throw new BiliException(ErrorKind.StreamExpired, "分片合并后长度校验失败，请重试");
+
+        progress?.Report(new DownloadProgress(total, total, AverageSpeed()));
+        return new DownloadResult(total, prefix > 0, (int)Interlocked.Read(ref attempts));
+    }
+
+    private static ChunkPlan CreatePlan(string targetPath, long prefix, long total, int count, long chunkSize)
+    {
+        PartialFile.DeleteParts(targetPath);
+        var plan = new ChunkPlan(prefix, total, count, chunkSize);
+        PartialFile.WritePlan(targetPath, plan);
+        return plan;
+    }
+
+    /// <summary>
+    /// 把分片按序追加回主文件，拼完一片删一片。
+    /// 中途被打断时剩下的分片还在，下次继续拼即可，不会重复追加。
+    /// </summary>
+    private static async Task ConcatenateAsync(string targetPath, ChunkPlan plan, CancellationToken ct)
+    {
+        var position = File.Exists(targetPath) ? new FileInfo(targetPath).Length : 0;
+
+        await using var output = new FileStream(targetPath, FileMode.OpenOrCreate,
+            FileAccess.Write, FileShare.None, 1 << 16, useAsync: true);
+        output.Position = position;
+
+        for (var i = 0; i < plan.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var part = PartialFile.PartPath(targetPath, i);
+            if (!File.Exists(part)) continue; // 这一片上次已经拼进去了
+
+            await using (var input = new FileStream(part, FileMode.Open, FileAccess.Read, FileShare.None, 1 << 16, useAsync: true))
+            {
+                await input.CopyToAsync(output, ct).ConfigureAwait(false);
+            }
+
+            PartialFile.TryDelete(part);
+        }
+
+        await output.FlushAsync(ct).ConfigureAwait(false);
     }
 }

@@ -55,16 +55,66 @@ public sealed class TrayIconService : IDisposable
 
     public bool IsVisible { get; private set; }
 
+    /// <summary>
+    /// true 表示图标是「窗口最小化到托盘」带出来的，只能由 Hide() 撤掉；
+    /// 临时为弹气泡显示的图标不能改动这个状态，否则会把用户的最小化状态一起清掉。
+    /// </summary>
+    private bool _pinned;
+
     public void Show()
     {
         _notify.Visible = true;
         IsVisible = true;
+        _pinned = true;
     }
 
     public void Hide()
     {
         _notify.Visible = false;
         IsVisible = false;
+        _pinned = false;
+    }
+
+    /// <summary>
+    /// 气泡通知（设置项 NotifyOnComplete）。窗口在托盘里时直接弹；窗口在前台时图标本来是隐藏的，
+    /// 先临时显示再弹，弹完收回，避免为了一条通知在托盘里留下一个常驻图标。
+    /// </summary>
+    public void Notify(string title, string text)
+    {
+        try
+        {
+            var wasVisible = IsVisible;
+            if (!wasVisible)
+            {
+                _notify.Visible = true;
+                IsVisible = true;
+            }
+
+            _notify.BalloonTipTitle = title;
+            _notify.BalloonTipText = text;
+            _notify.ShowBalloonTip(5000);
+
+            if (wasVisible || _pinned) return;
+
+            var timer = new System.Windows.Forms.Timer { Interval = 8000 };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                timer.Dispose();
+
+                // 这 8 秒里用户可能已经主动最小化到托盘了，那就别收。
+                if (!_pinned && IsVisible)
+                {
+                    _notify.Visible = false;
+                    IsVisible = false;
+                }
+            };
+            timer.Start();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // 托盘不可用（远程会话、组策略禁用）时静默降级：通知只是锦上添花
+        }
     }
 
     public void Dispose()

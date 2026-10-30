@@ -36,12 +36,20 @@ public partial class App : Application
         ThemeService.Apply(settings.Theme);
         ThemeService.ApplyAccent(settings.AccentColor);
 
-        var http = HttpClientFactory.CreateBiliClient();
+        // 代理与请求超时只在创建 HttpClient 时生效，而客户端是单例，所以这两项改完要重启程序。
+        var http = HttpClientFactory.CreateBiliClient(
+            new HttpClientOptions(settings.ProxySetting, settings.ProxyAddress, settings.RequestTimeoutSeconds));
 
         var services = new ServiceCollection();
         services.AddSingleton(settings);
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(http);
+
+        // 全局限速是共享预算：所有任务、所有分片都从这一个桶里取配额，设置页改动即时生效。
+        services.AddSingleton<ISpeedLimiter>(_ => new TokenBucketSpeedLimiter(settings.GlobalSpeedLimitKbps * 1024L));
+        services.AddSingleton<ILogService>(_ => new LogService(settings));
+        services.AddSingleton<StartupService>();
+        services.AddSingleton<UpdateService>();
 
         // Core
         services.AddSingleton<ICredentialStore>(_ => new DpapiCredentialStore());
@@ -63,21 +71,30 @@ public partial class App : Application
 
         // ViewModels
         services.AddSingleton<MainViewModel>();
-        services.AddTransient(sp => new SettingsViewModel(sp.GetRequiredService<AppSettings>()));
+        services.AddTransient(sp => new SettingsViewModel(
+            sp.GetRequiredService<AppSettings>(),
+            null,
+            sp.GetRequiredService<ISpeedLimiter>(),
+            sp.GetRequiredService<StartupService>()));
 
         Services = services.BuildServiceProvider();
 
-        var window = new MainWindow(Services.GetRequiredService<MainViewModel>(), Services);
+        var args = Environment.GetCommandLineArgs();
+        var vm = Services.GetRequiredService<MainViewModel>();
+
+        // --resume：启动后自动继续上次没下完的任务，用于端到端验证跨重启恢复
+        if (args.Any(a => string.Equals(a, "--resume", StringComparison.OrdinalIgnoreCase)))
+            vm.AutoResumeRestored = true;
+
+        var window = new MainWindow(vm, Services);
         MainWindow = window;
         window.Show();
 
-        var args = Environment.GetCommandLineArgs();
 
         // 开发期界面取证（--shot=<dir>），发行版不会走到这里
         if (DiagnosticsShot.IsRequested(args))
         {
             DiagnosticsShot.Trace($"startup args=[{string.Join(' ', args)}]");
-            var vm = Services.GetRequiredService<MainViewModel>();
             window.Dispatcher.InvokeAsync(async () =>
             {
                 try
@@ -92,6 +109,16 @@ public partial class App : Application
                 }
             }, DispatcherPriority.ApplicationIdle);
         }
+    }
+
+    /// <summary>
+    /// 退出时统一释放 DI 容器：编排层会在 Dispose 里停掉所有后台流程，
+    /// 避免窗口关了但下载线程还在跑（表现为进程退不干净、临时文件被占着）。
+    /// </summary>
+    protected override void OnExit(ExitEventArgs e)
+    {
+        if (Services is IDisposable disposable) disposable.Dispose();
+        base.OnExit(e);
     }
 
     private void HookGlobalExceptions()
@@ -121,8 +148,10 @@ public partial class App : Application
     {
         try
         {
+            // 与 LogService / 设置页「打开日志目录」指向同一个目录，
+            // 否则用户点开目录只会看到一个空文件夹，崩溃日志其实躺在另一个目录下。
             var dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "BiliDownloader", "logs");
             Directory.CreateDirectory(dir);
 

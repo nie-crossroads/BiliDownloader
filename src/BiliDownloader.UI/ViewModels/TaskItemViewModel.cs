@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows.Threading;
 using BiliDownloader.Core.BiliApi;
 using BiliDownloader.Core.Models;
+using BiliDownloader.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -30,10 +31,11 @@ public partial class TaskItemViewModel : ObservableObject
     private readonly Action<string> _cancel;
     private readonly Action<string> _retry;
     private readonly Action<string> _openFolder;
+    private readonly AppSettings? _settings;
 
     public TaskItemViewModel(VideoTask task,
         Action<string> pause, Action<string> resume, Action<string> cancel, Action<string> retry,
-        Action<string> openFolder)
+        Action<string> openFolder, AppSettings? settings = null)
     {
         TaskId = task.TaskId;
         _pause = pause;
@@ -41,6 +43,7 @@ public partial class TaskItemViewModel : ObservableObject
         _cancel = cancel;
         _retry = retry;
         _openFolder = openFolder;
+        _settings = settings;
 
         Title = task.Title;
         DurationText = Formatters.Duration(task.Duration);
@@ -67,6 +70,16 @@ public partial class TaskItemViewModel : ObservableObject
     [ObservableProperty] private bool _canOpenFolder;
     [ObservableProperty] private bool _isRunning;
     [ObservableProperty] private string _qualityText = string.Empty;
+
+    /// <summary>
+    /// 完成后进度条的淡化程度（设置项 FadeCompletedProgress）。
+    /// 值在 ViewModel 里算好，XAML 只绑定结果——DataTemplate 里做动画容易踩 namescope 的坑。
+    /// </summary>
+    public double CompletedProgressOpacity =>
+        _settings is { FadeCompletedProgress: true } && StatusKind == TaskStatusKind.Done ? 0.5 : 1.0;
+
+    /// <summary>设置窗口关闭后重新取一次纯展示用的值（设置对象本身不会发通知）。</summary>
+    public void RefreshPresentation() => OnPropertyChanged(nameof(CompletedProgressOpacity));
 
     // ----------------------------------------------------- 多 P 层叠卡背
     // 批量任务不是一行走完就算完：后面还排着几集要用「层叠的卡」看出来。
@@ -190,6 +203,9 @@ public partial class TaskItemViewModel : ObservableObject
             DownloadStatus.Paused => "—",
             _ => "—"
         };
+
+        // StatusKind 变了，派生的淡化值也要跟着通知一次
+        OnPropertyChanged(nameof(CompletedProgressOpacity));
 
         IsRunning = StatusKind == TaskStatusKind.Running;
         CanPause = task.Status is DownloadStatus.Downloading or DownloadStatus.FetchingUrl

@@ -163,8 +163,11 @@
                                 <ColumnDefinition Width="66" />
                             </Grid.ColumnDefinitions>
 
+                            <!-- 完成后是否淡化由设置项 FadeCompletedProgress 决定；
+                                 写在元素上才能盖住下面 Style 触发器的取值 -->
                             <ProgressBar Grid.Column="0" VerticalAlignment="Center" IsHitTestVisible="False"
-                                         Value="{Binding Progress, Mode=OneWay}">
+                                         Value="{Binding Progress, Mode=OneWay}"
+                                         Opacity="{Binding CompletedProgressOpacity}">
                                 <ProgressBar.Style>
                                     <Style TargetType="ProgressBar" BasedOn="{StaticResource TaskProgress}">
                                         <Style.Triggers>
@@ -175,7 +178,6 @@
                                             <DataTrigger Binding="{Binding StatusKind}"
                                                          Value="{x:Static vm:TaskStatusKind.Done}">
                                                 <Setter Property="Foreground" Value="{DynamicResource OkBrush}" />
-                                                <Setter Property="Opacity" Value="0.5" />
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding StatusKind}"
                                                          Value="{x:Static vm:TaskStatusKind.Failed}">
@@ -420,7 +422,7 @@
                     <Popup IsOpen="{Binding IsAccountMenuOpen, Mode=TwoWay}" StaysOpen="False"
                            PlacementTarget="{Binding ElementName=AvatarButton}" Placement="Bottom"
                            HorizontalOffset="-150" VerticalOffset="8" AllowsTransparency="True"
-                           PopupAnimation="Fade">
+                           PopupAnimation="{Binding PopupAnimation}">
                         <Border Width="236" Padding="6" Margin="0,0,8,8"
                                 Background="{DynamicResource SurfaceBrush}"
                                 BorderBrush="{DynamicResource LineBrush}" BorderThickness="1"

@@ -1,3 +1,4 @@
+using BiliDownloader.Core.Download;
 using BiliDownloader.Core.Errors;
 
 namespace BiliDownloader.Core.Models;
@@ -51,4 +52,11 @@ public sealed class TaskPageItem
     public string? ErrorMessage { get; set; }
     /// <summary>直链重取次数（上限 1，避免死循环）。</summary>
     public int Attempts { get; set; }
+
+    /// <summary>
+    /// 本次下载所用视频流的身份指纹（首次探测时记下）。跨重启恢复时用它判断
+    /// 「新直链指向的还是不是同一条流」，对不上就整段重下。null = 未探测或服务端没给标识。
+    /// </summary>
+    public StreamFingerprint? VideoFingerprint { get; set; }
+    public StreamFingerprint? AudioFingerprint { get; set; }
 }

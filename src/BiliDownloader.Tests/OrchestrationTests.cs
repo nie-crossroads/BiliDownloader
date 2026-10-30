@@ -7,6 +7,7 @@ using BiliDownloader.Core.Merge;
 using BiliDownloader.Core.Models;
 using BiliDownloader.Core.Orchestration;
 using BiliDownloader.Core.Parse;
+using BiliDownloader.Core.Storage;
 
 namespace BiliDownloader.Tests;
 
@@ -51,12 +52,37 @@ public sealed class OrchestrationTests
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
 
+    [Fact]
+    public async Task ExistingFilePolicy_Skip_MarksPageSkippedAndKeepsExistingFile()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "BiliDownloaderTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        using var http = new HttpClient();
+        using var service = Create(new Api(), new Downloader(), http);
+
+        try
+        {
+            // 默认命名规则下这一页的文件名是「01 episode」
+            var existing = Path.Combine(root, "01 episode.mp4");
+            await File.WriteAllTextAsync(existing, "original");
+
+            var task = service.Enqueue(Request(root, ExistingFileAction.Skip));
+            await WaitAsync(service, task);
+
+            Assert.Equal(DownloadStatus.Skipped, task.Pages[0].Status);
+            Assert.Equal("original", await File.ReadAllTextAsync(existing));
+            Assert.Equal(existing, task.Pages[0].FinalPath);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
     private static readonly VideoInfo Info = new()
     {
         Bvid = "BV1xx411c7mD", Title = "test", Pages = [new(1, "episode", 1, TimeSpan.FromSeconds(60))]
     };
-    private static DownloadRequest Request(string directory) =>
-        new(Info.Bvid, [1, 1], 80, 7, 30280, directory, "test", null, null, TimeSpan.FromSeconds(60), 1);
+    private static DownloadRequest Request(string directory, ExistingFileAction policy = ExistingFileAction.Rename) =>
+        new(Info.Bvid, [1, 1], 80, 7, 30280, directory, "test", null, null, TimeSpan.FromSeconds(60), 1,
+            null, policy, null);
     private static VideoDownloadService Create(Api api, Downloader downloader, HttpClient http) =>
         new(api, downloader, new Merger(), new DefaultFileNameStrategy(), new UrlParser(), http);
     private static async Task WaitAsync(VideoDownloadService service, VideoTask task)
@@ -83,7 +109,11 @@ public sealed class OrchestrationTests
     private sealed class Downloader : IFileDownloader
     {
         public System.Collections.Concurrent.ConcurrentBag<long> Lengths { get; } = [];
+        /// <summary>探测返回的指纹；测试可换成「另一条流」来验证恢复时会整段重下。</summary>
+        public StreamFingerprint? Fingerprint { get; set; } = new("\"etag-1\"", null, 4);
         public Task<long?> ProbeLengthAsync(RemoteFile file, CancellationToken ct = default) => Task.FromResult<long?>(4);
+        public Task<StreamFingerprint?> ProbeFingerprintAsync(RemoteFile file, CancellationToken ct = default) =>
+            Task.FromResult(Fingerprint);
         public async Task<DownloadResult> DownloadAsync(RemoteFile file, string targetPath, DownloadOptions options,
             IProgress<DownloadProgress>? progress = null, CancellationToken ct = default)
         {

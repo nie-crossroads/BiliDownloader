@@ -89,6 +89,127 @@ public sealed class DownloadTests : IDisposable
 
     private static RemoteFile Remote(long length) => new("https://cdn.test/video", [], length);
 
+    // ---------------------------------------------------------------- 多连接分片
+
+    /// <summary>按请求里的 Range 返回对应字节，用来模拟支持断点续传的 CDN。</summary>
+    private static HttpClient RangeClient(long total, Action? onRequest = null) =>
+        Client(request =>
+        {
+            onRequest?.Invoke();
+            var range = request.Headers.Range!.Ranges.Single();
+            var from = range.From!.Value;
+            var to = Math.Min(range.To!.Value, total - 1);
+            return Partial(from, to, total);
+        });
+
+    private static byte[] Sequence(int length) => Enumerable.Range(0, length).Select(i => (byte)i).ToArray();
+
+    [Fact]
+    public async Task ChunkedDownload_ProducesContiguousFile_AndCleansUp()
+    {
+        Directory.CreateDirectory(_directory);
+        using var http = RangeClient(100);
+        var result = await new HttpFileDownloader(http)
+            .DownloadAsync(Remote(100), Target, new(ChunkSizeBytes: 25, Connections: 4));
+
+        Assert.Equal(100, result.Bytes);
+        // 关键：拼出来的必须是 0..99 的连续序列，分片顺序错了这里就会露馅
+        Assert.Equal(Sequence(100), await File.ReadAllBytesAsync(Target));
+        Assert.Empty(Directory.GetFiles(_directory, "*.part*"));
+        Assert.False(File.Exists(PartialFile.PlanPath(Target)));
+    }
+
+    [Fact]
+    public async Task ChunkedDownload_ResumesFromExistingParts()
+    {
+        Directory.CreateDirectory(_directory);
+        var requests = 0;
+
+        // 上一次跑到一半的状态：计划还在，part0 下完、part1 只下了一半。
+        // 注意 part1 负责的是 25..49，所以它的前半段必须是 25..34，而不是从 0 开始。
+        PartialFile.WritePlan(Target, new ChunkPlan(0, 100, 4, 25));
+        await File.WriteAllBytesAsync(PartialFile.PartPath(Target, 0), Sequence(25));
+        await File.WriteAllBytesAsync(PartialFile.PartPath(Target, 1),
+            Enumerable.Range(25, 10).Select(i => (byte)i).ToArray());
+
+        using var http = RangeClient(100, () => Interlocked.Increment(ref requests));
+        var result = await new HttpFileDownloader(http)
+            .DownloadAsync(Remote(100), Target, new(ChunkSizeBytes: 25, Connections: 4));
+
+        Assert.Equal(100, result.Bytes);
+        Assert.Equal(Sequence(100), await File.ReadAllBytesAsync(Target));
+        // part0 已完成不该再请求，part1 只补后 15 字节：请求数应少于全新下载的 4 次
+        Assert.True(requests <= 3, $"实际请求 {requests} 次，续传没有生效");
+    }
+
+    [Fact]
+    public async Task ChunkedDownload_ChangingPlan_DiscardsStaleParts()
+    {
+        Directory.CreateDirectory(_directory);
+
+        // 旧计划是 2 片，现在按 25 字节切成 4 片：边界变了，旧分片必须作废
+        PartialFile.WritePlan(Target, new ChunkPlan(0, 100, 2, 50));
+        await File.WriteAllBytesAsync(PartialFile.PartPath(Target, 0), Sequence(50));
+        await File.WriteAllBytesAsync(PartialFile.PartPath(Target, 1), Sequence(50));
+
+        using var http = RangeClient(100);
+        var result = await new HttpFileDownloader(http)
+            .DownloadAsync(Remote(100), Target, new(ChunkSizeBytes: 25, Connections: 4));
+
+        Assert.Equal(100, result.Bytes);
+        Assert.Equal(Sequence(100), await File.ReadAllBytesAsync(Target));
+    }
+
+    [Fact]
+    public async Task ChunkedDownload_ProbesLengthWhenUnknown()
+    {
+        Directory.CreateDirectory(_directory);
+        using var http = RangeClient(100);
+        // ExpectedLength 为 0 时先探测总长度，拿到真实长度后仍然可以走分片路径
+        var result = await new HttpFileDownloader(http)
+            .DownloadAsync(Remote(0), Target, new(ChunkSizeBytes: 25, Connections: 4));
+
+        Assert.Equal(100, result.Bytes);
+        Assert.Equal(Sequence(100), await File.ReadAllBytesAsync(Target));
+    }
+
+    // ---------------------------------------------------------------- 备用节点回退开关
+
+    [Fact]
+    public async Task AllowFallbackDisabled_DoesNotSwitchToBackupUrl()
+    {
+        var calls = 0;
+        using var http = Client(_ =>
+        {
+            calls++;
+            return new(HttpStatusCode.Forbidden);
+        });
+
+        var file = new RemoteFile("https://cdn.test/video", ["https://cdn.test/backup"], 4);
+        var ex = await Assert.ThrowsAsync<BiliException>(() =>
+            new HttpFileDownloader(http).DownloadAsync(file, Target, new(AllowFallback: false)));
+
+        Assert.Equal(ErrorKind.StreamExpired, ex.Kind);
+        Assert.Equal(1, calls); // 关掉回退后只在主链上失败，不再试备用域名
+    }
+
+    [Fact]
+    public async Task AllowFallbackEnabled_TriesBackupUrl()
+    {
+        var calls = 0;
+        using var http = Client(_ =>
+        {
+            calls++;
+            return calls == 1 ? new(HttpStatusCode.Forbidden) : Partial(0, 3, 4);
+        });
+
+        var file = new RemoteFile("https://cdn.test/video", ["https://cdn.test/backup"], 4);
+        var result = await new HttpFileDownloader(http).DownloadAsync(file, Target, new(AllowFallback: true));
+
+        Assert.Equal(4, result.Bytes);
+        Assert.Equal(2, calls); // 主链 403 后确实切到了备用域名
+    }
+
     [Fact]
     public async Task RequestTimeout_IsNetworkFailure_NotUserPause()
     {

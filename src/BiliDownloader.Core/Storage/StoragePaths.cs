@@ -42,20 +42,44 @@ public static class StoragePaths
 
     /// <summary>
     /// 原子落盘：先复制到目标目录的独占 .incomplete 文件，再改名。
-    /// 返回最终路径。目标已存在时按 Rename 策略加 (1)(2)。
+    /// 返回最终路径；<see cref="ExistingFileAction.Skip"/> 且目标已存在时返回 null（调用方应记为跳过）。
+    /// 默认 Rename：目标已存在就加 (1)(2)，不覆盖任何已有文件。
     /// </summary>
-    public static string Commit(string tempFile, string targetDirectory, string fileNameWithoutExtension,
-        string extension = ".mp4")
+    public static string? Commit(string tempFile, string targetDirectory, string fileNameWithoutExtension,
+        string extension = ".mp4", ExistingFileAction action = ExistingFileAction.Rename)
     {
         Directory.CreateDirectory(targetDirectory);
 
         var desiredPath = Path.Combine(targetDirectory, fileNameWithoutExtension + extension);
+
+        if (action == ExistingFileAction.Skip && File.Exists(desiredPath))
+        {
+            // 用户选了「跳过」：成品已经在那儿了，临时文件留着没意义。
+            TryDelete(tempFile);
+            return null;
+        }
+
         // 每次提交独占暂存文件，最终重命名禁止覆盖；并发同名任务也不会丢文件。
         var staging = Path.Combine(targetDirectory, $".{Guid.NewGuid():N}.incomplete");
         try
         {
             // 保留源文件直到最终提交成功，失败时仍可重试。
             File.Copy(tempFile, staging, overwrite: false);
+
+            if (action == ExistingFileAction.Overwrite)
+            {
+                try
+                {
+                    File.Move(staging, desiredPath, overwrite: true);
+                    TryDelete(tempFile);
+                    return desiredPath;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // 覆盖失败（目标被占用等）不能把成品弄丢，退回改名策略继续尝试。
+                }
+            }
+
             while (true)
             {
                 var finalPath = EnsureUnique(desiredPath);

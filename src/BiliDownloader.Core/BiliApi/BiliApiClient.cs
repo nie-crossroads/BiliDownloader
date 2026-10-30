@@ -14,11 +14,7 @@ namespace BiliDownloader.Core.BiliApi;
 /// </summary>
 public sealed class BiliApiClient : IBiliApiClient
 {
-    internal static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString
-    };
+    internal static readonly JsonSerializerOptions JsonOptions = DtoMapping.JsonOptions;
 
     private readonly HttpClient _http;
     private readonly ICredentialStore _credentials;
@@ -63,39 +59,7 @@ public sealed class BiliApiClient : IBiliApiClient
         var payload = await GetJsonAsync<VideoViewResponse>($"{Endpoints.View}?{query}", ct).ConfigureAwait(false);
         ThrowIfFailed(payload.Code, payload.Message);
 
-        var data = payload.Data ?? throw BiliException.VideoUnavailable();
-        if (string.IsNullOrWhiteSpace(data.Bvid))
-            throw BiliException.VideoUnavailable();
-
-        var pages = data.Pages?.Select(p => new PageInfo(
-                p.Cid,
-                string.IsNullOrWhiteSpace(p.Part) ? $"P{p.PageIndex}" : p.Part,
-                p.PageIndex <= 0 ? 1 : p.PageIndex,
-                TimeSpan.FromSeconds(Math.Max(0, p.Duration))))
-            .ToList() ?? [];
-
-        if (pages.Count == 0 && data.Cid > 0)
-        {
-            pages.Add(new PageInfo(data.Cid, data.Title ?? "视频", 1, TimeSpan.FromSeconds(data.Duration)));
-        }
-
-        var isPaid = (data.Rights?.Pay ?? 0) > 0
-                     || data.IsUpowerExclusive
-                     || data.IsChargeableSeason;
-
-        return new VideoInfo
-        {
-            Bvid = data.Bvid,
-            Avid = data.Aid,
-            Title = data.Title ?? data.Bvid,
-            UpName = data.Owner?.Name,
-            UpMid = data.Owner?.Mid ?? 0,
-            CoverUrl = NormalizeUrl(data.Pic),
-            Duration = TimeSpan.FromSeconds(Math.Max(0, data.Duration)),
-            Pages = pages,
-            IsPaidContent = isPaid,
-            HasUgcSeason = data.UgcSeason is not null
-        };
+        return DtoMapping.ToVideoInfo(payload);
     }
 
     public async Task<PlayUrlResult> GetPlayUrlAsync(PlayUrlRequest request, CancellationToken ct = default)
@@ -129,33 +93,7 @@ public sealed class BiliApiClient : IBiliApiClient
         var payload = await GetJsonAsync<PlayUrlResponse>(url, ct).ConfigureAwait(false);
         ThrowIfFailed(payload.Code, payload.Message);
 
-        var data = payload.Data;
-        if (data?.Dash is null)
-            throw new BiliException(ErrorKind.Unknown, "该视频暂不支持 DASH 流，无法下载");
-
-        var videos = (data.Dash.Video ?? [])
-            .Where(v => v.Url is not null)
-            .Select(v => new DashStream(
-                v.Id, v.CodecId, v.Url!, v.Backups ?? [], v.Codecs,
-                v.Width, v.Height, v.Bandwidth, v.Size))
-            .ToList();
-
-        var audios = (data.Dash.Audio ?? [])
-            .Where(a => a.Url is not null)
-            .Select(a => new DashStream(
-                a.Id, a.CodecId, a.Url!, a.Backups ?? [], a.Codecs,
-                a.Width, a.Height, a.Bandwidth, a.Size))
-            .ToList();
-
-        if (videos.Count == 0)
-            throw new BiliException(ErrorKind.VipRequired, "没有获取到可下载的视频流（该画质需要大会员）");
-
-        return new PlayUrlResult
-        {
-            Videos = videos,
-            Audios = audios,
-            Duration = TimeSpan.FromSeconds(data.Dash.Duration > 0 ? data.Dash.Duration : 0)
-        };
+        return DtoMapping.ToPlayUrlResult(payload);
     }
 
     /// <summary>按需组装 fnval，不写 4048 魔数（方案设计 §8.4）。</summary>
@@ -250,9 +188,4 @@ public sealed class BiliApiClient : IBiliApiClient
             _ => new BiliException(ErrorKind.VideoUnavailable, message ?? "接口返回错误，请稍后重试")
         };
     }
-
-    private static string? NormalizeUrl(string? url) =>
-        string.IsNullOrWhiteSpace(url) ? null
-        : url.StartsWith("//", StringComparison.Ordinal) ? "https:" + url
-        : url.Replace("http://", "https://", StringComparison.OrdinalIgnoreCase);
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Text;
 
@@ -14,17 +15,24 @@ public sealed class DefaultFileNameStrategy : IFileNameStrategy
     private const int MaxLength = 80;
 
     private readonly FileNameRule _rule;
+    private readonly int _padding;
 
-    public DefaultFileNameStrategy(FileNameRule rule = FileNameRule.IndexAndPart)
+    public DefaultFileNameStrategy(FileNameRule rule = FileNameRule.IndexAndPart, int indexPadding = 2)
     {
         _rule = rule;
+        _padding = indexPadding == 3 ? 3 : 2;
     }
 
-    public string Build(int? index, string title, string? upName)
+    public string Build(int? index, string title, string? upName, FileNameOptions? options = null)
     {
-        var core = _rule switch
+        var rule = options?.Rule ?? _rule;
+        var padding = options?.Padding ?? _padding;
+
+        var core = rule switch
         {
-            FileNameRule.IndexAndPart => (index.HasValue ? $"{index.Value:00} " : "") + (title ?? "未命名"),
+            FileNameRule.IndexAndPart => (index.HasValue
+                ? index.Value.ToString(CultureInfo.InvariantCulture).PadLeft(padding, '0') + " "
+                : "") + (title ?? "未命名"),
             FileNameRule.PlainTitle  => title ?? "未命名",
             FileNameRule.WithUpName  => (upName ?? "未知UP") + " - " + (title ?? "未命名"),
             _ => title ?? "未命名"

@@ -39,7 +39,8 @@ public static class WbiSign
     }
 
     /// <summary>对业务参数签名，返回带 wts / w_rid 的查询串。</summary>
-    public static string Sign(IDictionary<string, string> parameters, string mixinKey)
+    /// <param name="wts">时间戳，仅测试时传入以锁定输出；生产不传，取当前 UTC 秒。</param>
+    public static string Sign(IDictionary<string, string> parameters, string mixinKey, long? wts = null)
     {
         // 1. 过滤 value 中的特殊字符
         var filtered = parameters
@@ -53,8 +54,8 @@ public static class WbiSign
                     .Select(p => $"{p.Key}={p.Value}"));
 
         // 3. 追加 wts
-        long wts = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        query += $"&wts={wts}";
+        var timestamp = wts ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        query += $"&wts={timestamp}";
 
         // 4. MD5(query + mixinKey)
         var rid = Md5Hex(query + mixinKey);

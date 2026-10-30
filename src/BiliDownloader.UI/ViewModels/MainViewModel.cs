@@ -3,11 +3,13 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
 using BiliDownloader.Core.Auth;
 using BiliDownloader.Core.BiliApi.Models;
 using BiliDownloader.Core.Errors;
+using BiliDownloader.Core.FileName;
 using BiliDownloader.Core.Models;
 using BiliDownloader.Core.Orchestration;
 using BiliDownloader.UI.Services;
@@ -30,6 +32,8 @@ public partial class MainViewModel : ObservableObject
     private readonly IVideoDownloadService _service;
     private readonly IBiliSession _session;
     private readonly AppSettings _settings;
+    private readonly ILogService _log;
+    private readonly UpdateService _updates;
     private readonly Dispatcher _dispatcher;
 
     private readonly Dictionary<string, VideoTask> _taskModels = new();
@@ -41,11 +45,17 @@ public partial class MainViewModel : ObservableObject
     private string? _qrKey;
     private bool _qrPolling;
 
-    public MainViewModel(IVideoDownloadService service, IBiliSession session, AppSettings settings)
+    /// <summary>需要通知用户时抛出（标题 + 正文），由主窗口转成托盘气泡。</summary>
+    public event Action<string, string>? NotificationRequested;
+
+    public MainViewModel(IVideoDownloadService service, IBiliSession session, AppSettings settings,
+        ILogService log, UpdateService updates)
     {
         _service = service;
         _session = session;
         _settings = settings;
+        _log = log;
+        _updates = updates;
         _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
 
         _service.ProgressChanged += OnProgressChanged;
@@ -59,6 +69,39 @@ public partial class MainViewModel : ObservableObject
         };
 
         Logs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(LogCount));
+    }
+
+    /// <summary>
+    /// 启动后自动继续恢复出来的任务。只在 <c>--resume</c> 下打开，用于端到端验证跨重启恢复；
+    /// 正常启动一律不自动开下载（用户可能不想下了，且启动即联网容易触发风控）。
+    /// </summary>
+    public bool AutoResumeRestored { get; set; }
+
+    /// <summary>
+    /// 启动时把上次没下完的任务从清单里恢复出来，一律置为「已暂停」等用户点继续。
+    /// <para>
+    /// 故意不自动开下载：一来用户可能已经不想下了，二来启动即联网容易触发风控。
+    /// 继续时会逐页校验流指纹，对不上的页会自动整段重下（不会拼出坏文件）。
+    /// </para>
+    /// </summary>
+    public void RestoreUnfinishedTasks()
+    {
+        try
+        {
+            var restored = _service.LoadResumable(_settings.SaveDirectory);
+            foreach (var task in restored)
+            {
+                AddTaskItem(task);
+                AppendLog(LogLevel.Info,
+                    $"恢复未完成的任务：{task.Title}（{task.CompletedCount}/{task.Pages.Count} 页已完成）");
+                if (AutoResumeRestored) ResumeTask(task.TaskId);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 清单读不出来只影响恢复，不该让程序起不来
+            AppendLog(LogLevel.Warn, $"读取下载清单失败：{ex.Message}");
+        }
     }
 
     // ------------------------------------------------------------ 输入 / 解析
@@ -207,7 +250,12 @@ public partial class MainViewModel : ObservableObject
             preview.UpNameOrNull,
             preview.CoverUrl,
             preview.Duration,
-            preview.TotalPages);
+            preview.TotalPages,
+            // 入队时把命名规则 / 序号位数 / 同名策略 / 并发与重试固定下来，
+            // 之后在设置页改动不会影响这个已经在跑的任务。
+            new FileNameOptions(_settings.NameRule, _settings.IndexPadding),
+            _settings.ExistingFilePolicy,
+            _settings.DownloadPreferences);
 
         try
         {
@@ -245,10 +293,26 @@ public partial class MainViewModel : ObservableObject
     public bool HasRunningTasks => Tasks.Any(t => t.CanPause);
     public string PauseAllText => HasRunningTasks ? "全部暂停" : "全部继续";
 
+    /// <summary>
+    /// 弹层是否淡入（设置项 ReduceMotion）。勾上「减少动效」后弹层直接出现，不再淡入。
+    /// </summary>
+    public PopupAnimation PopupAnimation =>
+        _settings.ReduceMotion ? PopupAnimation.None : PopupAnimation.Fade;
+
+    /// <summary>
+    /// 设置窗口关闭后调一次。动效、完成后淡化这类纯展示项依赖 AppSettings，
+    /// 而它不是可观察对象，改完不会自己发通知，只能在这里补一次刷新。
+    /// </summary>
+    public void RefreshPresentationSettings()
+    {
+        OnPropertyChanged(nameof(PopupAnimation));
+        foreach (var item in Tasks) item.RefreshPresentation();
+    }
+
     private void AddTaskItem(VideoTask task)
     {
         var item = new TaskItemViewModel(task,
-            PauseTask, ResumeTask, CancelTask, RetryTask, OpenTaskFolder);
+            PauseTask, ResumeTask, CancelTask, RetryTask, OpenTaskFolder, _settings);
         _taskItems[task.TaskId] = item;
         Tasks.Insert(0, item);
         RefreshTaskSummary();
@@ -291,6 +355,9 @@ public partial class MainViewModel : ObservableObject
             {
                 case DownloadStatus.Completed:
                     AppendLog(LogLevel.Info, $"完成：{e.Task.Title}");
+                    // 最小化到托盘时用户看不到列表变化，给个气泡提示。
+                    if (_settings.NotifyOnComplete)
+                        NotificationRequested?.Invoke("下载完成", e.Task.Title);
                     if (_settings.AutoOpenFolder) OpenTaskFolder(e.Task.TaskId);
                     break;
                 case DownloadStatus.Failed:
@@ -366,6 +433,8 @@ public partial class MainViewModel : ObservableObject
         var completed = Tasks.Where(t => t.StatusKind == TaskStatusKind.Done).ToList();
         foreach (var item in completed)
         {
+            // 同时从编排层移除：停掉后台流程、删掉清单条目，否则重启后又冒出来
+            _service.Remove(item.TaskId);
             Tasks.Remove(item);
             _taskItems.Remove(item.TaskId);
             _taskModels.Remove(item.TaskId);
@@ -386,6 +455,9 @@ public partial class MainViewModel : ObservableObject
 
     public void AppendLog(LogLevel level, string text)
     {
+        // 落盘与界面列表各写一份：界面那份会滚动丢弃，日志目录里的留着排查用。
+        _log.Write(level, text);
+
         void Add()
         {
             Logs.Add(new LogEntry
@@ -744,5 +816,20 @@ public partial class MainViewModel : ObservableObject
         {
             AppendLog(LogLevel.Warn, $"恢复登录态失败：{ex.UserMessage}");
         }
+
+        // 放在登录恢复之后：画质档位的可用性判断依赖登录态
+        RestoreUnfinishedTasks();
+
+        if (_settings.CheckUpdateOnStartup) _ = CheckUpdateAsync();
+    }
+
+    /// <summary>启动检查更新。查不到或失败都静默，不该用弹窗打断用户。</summary>
+    private async Task CheckUpdateAsync()
+    {
+        var info = await _updates.CheckAsync().ConfigureAwait(false);
+        if (info is null) return;
+
+        AppendLog(LogLevel.Info, $"发现新版本 {info.Version}（当前 {_updates.CurrentVersion}）");
+        NotificationRequested?.Invoke("有新版本可用", $"{info.Version} 已发布，可前往 Releases 下载");
     }
 }

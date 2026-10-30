@@ -2,6 +2,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using BiliDownloader.Core.Download;
 using BiliDownloader.UI.Services;
 using BiliDownloader.UI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,6 +32,9 @@ public partial class MainWindow : Window
         _tray.OpenRequested += RestoreFromTray;
         _tray.ExitRequested += ExitFromTray;
 
+        // 完成通知 / 新版本提示：视图模型只管喊，气泡由托盘负责弹。
+        _viewModel.NotificationRequested += (title, text) => _tray.Notify(title, text);
+
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         Closing += OnWindowClosing;
@@ -40,11 +44,16 @@ public partial class MainWindow : Window
     private void OnSettingsClick(object sender, RoutedEventArgs e)
     {
         var settings = _services.GetRequiredService<AppSettings>();
-        var window = new SettingsWindow(new SettingsViewModel(settings, OpenCookieFromSettings))
+        var viewModel = new SettingsViewModel(settings, OpenCookieFromSettings,
+            _services.GetRequiredService<ISpeedLimiter>(), _services.GetRequiredService<StartupService>());
+        var window = new SettingsWindow(viewModel)
         {
             Owner = this
         };
         window.ShowDialog();
+
+        // 动效、完成后淡化这类展示项不会自己发通知，回到主窗口补刷新一次。
+        _viewModel.RefreshPresentationSettings();
     }
 
     /// <summary>设置页里的「手动粘贴 Cookie」：先关设置窗口，再回到主窗打开弹层。</summary>

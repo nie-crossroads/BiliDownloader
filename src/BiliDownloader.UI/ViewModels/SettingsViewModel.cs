@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using BiliDownloader.Core.BiliApi;
+using BiliDownloader.Core.Download;
 using BiliDownloader.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -30,12 +31,17 @@ public partial class SettingsViewModel : ObservableObject
 {
     private readonly AppSettings _settings;
     private readonly Action? _openCookieDialog;
+    private readonly ISpeedLimiter? _limiter;
+    private readonly StartupService? _startup;
     private static readonly HttpClient ProbeHttp = new() { Timeout = TimeSpan.FromSeconds(8) };
 
-    public SettingsViewModel(AppSettings settings, Action? openCookieDialog = null)
+    public SettingsViewModel(AppSettings settings, Action? openCookieDialog = null,
+        ISpeedLimiter? limiter = null, StartupService? startup = null)
     {
         _settings = settings;
         _openCookieDialog = openCookieDialog;
+        _limiter = limiter;
+        _startup = startup;
 
         QualityOptions = QualityCatalog.QualityList
             .Select(qn => new QnOption(qn, QualityCatalog.QualityName(qn)))
@@ -87,7 +93,7 @@ public partial class SettingsViewModel : ObservableObject
     public string PaneDescription => SelectedPane switch
     {
         "basic" => "启动行为、关闭行为与数据位置。",
-        "network" => "代理与请求策略。调低并发可缓解风控。",
+        "network" => "代理与请求策略。调低并发可缓解风控；代理与超时改动需重启程序生效。",
         "appearance" => "主题与列表呈现方式。",
         "about" => "版本信息、依赖组件与日志清理。",
         _ => "改动立即生效。并发与连接数调高会更快，但更容易触发风控。"
@@ -178,7 +184,12 @@ public partial class SettingsViewModel : ObservableObject
     public int GlobalSpeedLimitKbps
     {
         get => _settings.GlobalSpeedLimitKbps;
-        set => Edit(() => _settings.GlobalSpeedLimitKbps = value);
+        set
+        {
+            Edit(() => _settings.GlobalSpeedLimitKbps = value);
+            // 限速器是全局共享的，改完对正在下载的任务立刻生效，不用等下一个任务。
+            _limiter?.Update(value * 1024L);
+        }
     }
 
     public bool AutoOpenFolder
@@ -213,7 +224,12 @@ public partial class SettingsViewModel : ObservableObject
     public bool AutoStart
     {
         get => _settings.AutoStart;
-        set => Edit(() => _settings.AutoStart = value);
+        set
+        {
+            Edit(() => _settings.AutoStart = value);
+            // 开机启动写的是当前用户的 Run 注册表项，切换即时生效。
+            _startup?.SetEnabled(value);
+        }
     }
 
     public bool CheckUpdateOnStartup

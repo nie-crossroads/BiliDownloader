@@ -2,6 +2,8 @@ namespace BiliDownloader.UI.ViewModels;
 
 public enum LogLevel
 {
+    /// <summary>最详细。设置页 LogLevel 的阈值比较依赖这个顺序，不要调整成员次序。</summary>
+    Debug,
     Info,
     Warn,
     Error

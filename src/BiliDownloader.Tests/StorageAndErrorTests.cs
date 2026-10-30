@@ -39,7 +39,7 @@ public sealed class StorageAndErrorTests
             var results = await Task.WhenAll(sources.Select(source => Task.Run(() => StoragePaths.Commit(source, root, "episode"))));
             Assert.Equal(sources.Length, results.Distinct().Count());
             Assert.Equal("original", await File.ReadAllTextAsync(existing));
-            for (var i = 0; i < results.Length; i++) Assert.Equal(i.ToString(), await File.ReadAllTextAsync(results[i]));
+            for (var i = 0; i < results.Length; i++) Assert.Equal(i.ToString(), await File.ReadAllTextAsync(results[i]!));
             Assert.Empty(Directory.GetFiles(root, "*.incomplete"));
         }
         finally { Directory.Delete(root, true); }

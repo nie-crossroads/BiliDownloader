@@ -135,14 +135,33 @@ public static class QualityCatalog
             ?? available.OrderByDescending(o => o.Qn).ThenBy(o => CodecPriority(o.CodecId)).First();
     }
 
-    /// <summary>默认音质：普通档里可用的最高（30280 → 30232 → 30216），不自动升到会员档。</summary>
+    /// <summary>
+    /// 默认音质：优先用户在设置里指定的档位；指定档不可用时，在「普通档」里取最高
+    /// （30280 → 30232 → 30216），不自动升到会员专属档。
+    /// <para>
+    /// 注意不能写成 <c>Id &lt;= 30280</c>：30251（Hi-Res）和 30250（杜比）在数值上都小于 30280，
+    /// 那样会把会员档也算进普通档，默认就白白升到会员音质了。是否会员档只能查权限表。
+    /// </para>
+    /// </summary>
     public static AudioOption? PickDefaultAudio(IReadOnlyList<AudioOption> options, int preferredId)
     {
-        var normal = options.Where(o => o.IsAvailable && o.Id <= 30280).ToList();
-        return normal.FirstOrDefault(o => o.Id == preferredId)
-            ?? normal.OrderByDescending(o => o.Id).FirstOrDefault()
-            ?? options.FirstOrDefault(o => o.IsAvailable);
+        var available = options.Where(o => o.IsAvailable).ToList();
+        if (available.Count == 0) return null;
+
+        // 指定档优先——包括会员档，那是用户主动选的，应当尊重
+        var exact = available.FirstOrDefault(o => o.Id == preferredId);
+        if (exact is not null) return exact;
+
+        // 没指定或指定档拿不到：普通档里取最高
+        var normal = available.Where(o => !IsVipAudioTier(o.Id)).ToList();
+        return normal.OrderByDescending(o => o.Id).FirstOrDefault()
+               // 只有会员档可用时没得挑，退回第一个可用的
+               ?? available[0];
     }
+
+    /// <summary>是否会员专属音质档（权限 2）。</summary>
+    private static bool IsVipAudioTier(int id) =>
+        AudioTable.FirstOrDefault(t => t.Id == id).Permission >= 2;
 
     /// <summary>设置里存的编码名 → codecid。认不出来一律按 AVC 处理。</summary>
     public static int CodecIdFromName(string? name) => name switch

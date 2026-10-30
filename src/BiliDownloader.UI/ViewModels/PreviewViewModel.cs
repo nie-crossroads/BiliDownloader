@@ -56,10 +56,12 @@ public sealed class AudioChoice
 public partial class PreviewViewModel : ObservableObject
 {
     private readonly VideoInfo _info;
+    private readonly AppSettings _settings;
 
     public PreviewViewModel(VideoInfo info, AppSettings settings)
     {
         _info = info;
+        _settings = settings;
 
         Title = info.Title;
         UpName = string.IsNullOrWhiteSpace(info.UpName) ? "未知 UP" : info.UpName!;
@@ -146,6 +148,13 @@ public partial class PreviewViewModel : ObservableObject
 
     public async Task LoadCoverAsync()
     {
+        // 设置里关掉「显示缩略图」就别请求封面：省一次网络请求，也避免用户不想要的图被缓存下来。
+        if (!_settings.ShowThumbnails)
+        {
+            CoverImage = null;
+            return;
+        }
+
         CoverImage = await ImageCache.LoadAsync(CoverUrl, 344).ConfigureAwait(true);
     }
 

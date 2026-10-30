@@ -379,8 +379,9 @@
                                     <TextBlock Text="界面语言" Style="{StaticResource RowTitle}" />
                                     <TextBlock Text="v1 仅提供简体中文" Style="{StaticResource RowDesc}" />
                                 </StackPanel>
+                                <!-- v1 没有本地化资源，切了也不会变，置灰避免看起来像能用 -->
                                 <ComboBox Grid.Column="1" Style="{StaticResource FieldComboBox}" Width="130" Height="30"
-                                          VerticalAlignment="Center" Margin="12,0,0,0"
+                                          VerticalAlignment="Center" Margin="12,0,0,0" IsEnabled="False"
                                           ItemsSource="{Binding LanguageOptions}" ItemTemplate="{StaticResource OptionItemTemplate}"
                                           SelectedValuePath="Value" SelectedValue="{Binding Language, Mode=TwoWay}" />
                             </Grid>
