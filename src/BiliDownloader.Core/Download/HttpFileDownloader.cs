@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using BiliDownloader.Core.Errors;
 using BiliDownloader.Core.Models;
+using BiliDownloader.Core.Utils;
 
 namespace BiliDownloader.Core.Download;
 
@@ -31,11 +32,14 @@ public sealed class HttpFileDownloader : IFileDownloader
     public async Task<DownloadResult> DownloadAsync(RemoteFile file, string targetPath, DownloadOptions options,
         IProgress<DownloadProgress>? progress = null, CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(file);
-        ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
-        ArgumentNullException.ThrowIfNull(options);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.ChunkSizeBytes);
-        ArgumentOutOfRangeException.ThrowIfNegative(options.MaxRetriesPerUrl);
+        if (file is null) throw new ArgumentNullException(nameof(file));
+        if (string.IsNullOrWhiteSpace(targetPath))
+            throw new ArgumentException("目标路径不能为空", nameof(targetPath));
+        if (options is null) throw new ArgumentNullException(nameof(options));
+        if (options.ChunkSizeBytes <= 0)
+            throw new ArgumentOutOfRangeException(nameof(options), "分片大小必须大于 0");
+        if (options.MaxRetriesPerUrl < 0)
+            throw new ArgumentOutOfRangeException(nameof(options), "重试次数不能为负");
         ct.ThrowIfCancellationRequested();
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(targetPath))!);
@@ -117,7 +121,9 @@ public sealed class HttpFileDownloader : IFileDownloader
         var resumed = written > 0;
         var attempts = 0;
 
-        await using var stream = new FileStream(targetPath, FileMode.OpenOrCreate,
+        // net48 的 FileStream 不实现 IAsyncDisposable，只能用同步 using；
+        // Dispose 会同步 flush 到磁盘，对下载来说正是想要的收尾动作。
+        using var stream = new FileStream(targetPath, FileMode.OpenOrCreate,
             FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true);
         stream.Position = written;
 
@@ -210,14 +216,14 @@ public sealed class HttpFileDownloader : IFileDownloader
                     if (range.Length is long length) total = length;
                 }
 
-                await using var body = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                using var body = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
                 var buffer = new byte[64 * 1024];
                 var sinceReport = 0L;
                 int read;
 
-                while ((read = await body.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+                while ((read = await body.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false)) > 0)
                 {
-                    await stream.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                    await stream.WriteAsync(buffer, 0, read, ct).ConfigureAwait(false);
                     written += read;
                     sinceReport += read;
 
@@ -293,7 +299,7 @@ public sealed class HttpFileDownloader : IFileDownloader
     private async Task<DownloadResult> DownloadChunkedAsync(IReadOnlyList<string> urls, string targetPath,
         DownloadOptions options, long total, IProgress<DownloadProgress>? progress, CancellationToken ct)
     {
-        var connections = Math.Clamp(options.Connections, 1, 64);
+        var connections = Net48.Clamp(options.Connections, 1, 64);
         var chunkSize = options.ChunkSizeBytes;
 
         var prefix = File.Exists(targetPath) ? new FileInfo(targetPath).Length : 0;
@@ -355,7 +361,7 @@ public sealed class HttpFileDownloader : IFileDownloader
             var length = plan.LengthOf(index);
             var start = plan.StartOf(index);
 
-            await using var stream = new FileStream(part, FileMode.OpenOrCreate,
+            using var stream = new FileStream(part, FileMode.OpenOrCreate,
                 FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true);
             stream.Position = received[index];
 
@@ -428,16 +434,16 @@ public sealed class HttpFileDownloader : IFileDownloader
                             throw BiliException.StreamExpired();
                     }
 
-                    await using var body = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+                    using var body = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
                     var buffer = new byte[64 * 1024];
                     var writtenHere = 0L;
                     int read;
 
-                    while ((read = await body.ReadAsync(buffer, token).ConfigureAwait(false)) > 0)
+                    while ((read = await body.ReadAsync(buffer, 0, buffer.Length, token).ConfigureAwait(false)) > 0)
                     {
                         if (read > length - received[index])
                             throw BiliException.StreamExpired();
-                        await stream.WriteAsync(buffer.AsMemory(0, read), token).ConfigureAwait(false);
+                        await stream.WriteAsync(buffer, 0, read, token).ConfigureAwait(false);
                         received[index] += read;
                         writtenHere += read;
                         Interlocked.Add(ref completed, read);
@@ -479,9 +485,9 @@ public sealed class HttpFileDownloader : IFileDownloader
         var pending = Enumerable.Range(0, plan.Count).Where(i => received[i] < plan.LengthOf(i)).ToArray();
         if (pending.Length > 0)
         {
-            await Parallel.ForEachAsync(pending,
-                new ParallelOptions { MaxDegreeOfParallelism = Math.Min(connections, pending.Length), CancellationToken = ct },
-                async (index, token) => await DownloadPartAsync(index, token).ConfigureAwait(false)).ConfigureAwait(false);
+            // net48 没有 Parallel.ForEachAsync，用等价实现（限流 + 取消传播 + 异常外抛）
+            await Net48.ForEachAsync(pending, Math.Min(connections, pending.Length), ct,
+                (index, token) => DownloadPartAsync(index, token)).ConfigureAwait(false);
         }
 
         if (rangeIgnored != 0)
@@ -524,7 +530,8 @@ public sealed class HttpFileDownloader : IFileDownloader
     {
         var position = File.Exists(targetPath) ? new FileInfo(targetPath).Length : 0;
 
-        await using var output = new FileStream(targetPath, FileMode.OpenOrCreate,
+        // net48 的 FileStream 不实现 IAsyncDisposable，只能同步释放
+        using var output = new FileStream(targetPath, FileMode.OpenOrCreate,
             FileAccess.Write, FileShare.None, 1 << 16, useAsync: true);
         output.Position = position;
 
@@ -535,14 +542,15 @@ public sealed class HttpFileDownloader : IFileDownloader
             var part = PartialFile.PartPath(targetPath, i);
             if (!File.Exists(part)) continue; // 这一片上次已经拼进去了
 
-            await using (var input = new FileStream(part, FileMode.Open, FileAccess.Read, FileShare.None, 1 << 16, useAsync: true))
+            using (var input = new FileStream(part, FileMode.Open, FileAccess.Read, FileShare.None, 1 << 16, useAsync: true))
             {
-                await input.CopyToAsync(output, ct).ConfigureAwait(false);
+                // net48 的 CopyToAsync 只有 (stream, bufferSize, ct) 这个带取消的重载
+                await input.CopyToAsync(output, 1 << 16, ct).ConfigureAwait(false);
             }
 
             PartialFile.TryDelete(part);
         }
 
-        await output.FlushAsync(ct).ConfigureAwait(false);
+        await output.FlushAsync().ConfigureAwait(false);
     }
 }

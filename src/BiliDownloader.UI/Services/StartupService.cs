@@ -51,9 +51,8 @@ public sealed class StartupService
     /// <summary>启动命令行。路径带引号，避免目录里有空格时被截断。</summary>
     private static string CommandLine()
     {
-        var path = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(path))
-            path = Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+        // net48 没有 Environment.ProcessPath（.NET 6+），直接用当前进程的主模块路径
+        var path = Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
 
         return $"\"{path}\"";
     }

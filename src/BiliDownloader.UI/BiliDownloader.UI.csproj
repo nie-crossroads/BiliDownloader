@@ -8,6 +8,20 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
+    <!-- net48 的 BCL 没有 System.Text.Json（Core 项目未把它传递过来，这里显式引用） -->
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\Polyfills.cs" Link="Polyfills\Polyfills.cs" />
+    <!-- 真实窗口抓屏（PrintWindow 经 DWM 合成），用于验证 ClearType 与 DPI 缩放是否真的生效。
+         与安装器共用同一份实现，避免两套截图口径不一致。 -->
+    <Compile Include="..\SetupShared\WindowCapture.cs" Link="Diagnostics\WindowCapture.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- net48 里 System.Net.Http 是独立程序集；.NET Core 下它是框架的一部分，无需显式引用 -->
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,7 +38,9 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- 迁回 net48：运行时由 Win10 1903+ / Win11 系统自带，不再随安装包分发 166 MB 的 .NET 运行时 -->
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
@@ -33,6 +49,8 @@
     <UseWindowsForms>true</UseWindowsForms>
     <!-- exe / 任务栏 / Alt-Tab / 安装包用多尺寸 ico；图标由 tools/IconForge 生成，勿手改 -->
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
+    <!-- PerMonitorV2 DPI 感知声明；net48 下必须与 App.config 的 DoNotScaleForDpiChanges 开关配合 -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
 </Project>

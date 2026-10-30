@@ -21,7 +21,9 @@ public sealed class BiliApiClient : IBiliApiClient
     private readonly TimeProvider _time;
 
     private string? _mixinKey;
-    private DateOnly _wbiKeyDate;
+
+    // net48 没有 DateOnly，用 DateTime 的日期部分（只比较“哪一天”，时间部分恒为 00:00）
+    private DateTime _wbiKeyDate;
 
     public BiliApiClient(HttpClient http, ICredentialStore credentials, TimeProvider? time = null)
     {
@@ -50,7 +52,8 @@ public sealed class BiliApiClient : IBiliApiClient
 
     public async Task<VideoInfo> GetVideoInfoAsync(string id, CancellationToken ct = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        if (string.IsNullOrWhiteSpace(id))
+            throw new ArgumentException("视频 ID 不能为空", nameof(id));
 
         var query = id.StartsWith("av", StringComparison.OrdinalIgnoreCase)
             ? $"aid={Uri.EscapeDataString(id[2..])}"
@@ -114,7 +117,7 @@ public sealed class BiliApiClient : IBiliApiClient
     /// <summary>WBI keys 按天缓存（nav 每日轮换，不要每次业务请求都先调 nav）。</summary>
     private async Task<string> GetMixinKeyAsync(CancellationToken ct)
     {
-        var today = DateOnly.FromDateTime(_time.GetLocalNow().DateTime);
+        var today = _time.GetLocalNow().Date;
         if (_mixinKey is not null && _wbiKeyDate == today) return _mixinKey;
 
         var data = await FetchNavDataAsync(ct).ConfigureAwait(false);
@@ -159,7 +162,9 @@ public sealed class BiliApiClient : IBiliApiClient
 
             response.EnsureSuccessStatusCode();
 
-            var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            // net48 的 ReadAsStringAsync 没有 CancellationToken 重载；请求本身已受 ct 控制，
+            // 这里读的是已经落地的响应体，不会再产生网络等待。
+            var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             var result = JsonSerializer.Deserialize<T>(json, JsonOptions);
             return result ?? throw BiliException.Network();
         }

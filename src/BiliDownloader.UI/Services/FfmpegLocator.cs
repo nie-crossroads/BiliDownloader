@@ -34,7 +34,7 @@ public static class FfmpegLocator
         var path = Environment.GetEnvironmentVariable("PATH");
         if (string.IsNullOrEmpty(path)) return null;
 
-        foreach (var dir in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        foreach (var dir in path.Split(new[] { Path.PathSeparator }, StringSplitOptions.RemoveEmptyEntries))
         {
             try
             {

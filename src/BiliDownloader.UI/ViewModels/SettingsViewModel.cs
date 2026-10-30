@@ -510,16 +510,19 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void BrowseSaveDirectory()
     {
-        var dialog = new Microsoft.Win32.OpenFolderDialog
+        // net48 的 WPF 没有 Microsoft.Win32.OpenFolderDialog（.NET 8 才加），
+        // 用 WinForms 的 FolderBrowserDialog 替代——项目已启用 UseWindowsForms（托盘在用），无新增依赖
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog
         {
-            Title = "选择默认保存目录",
-            InitialDirectory = Directory.Exists(_settings.SaveDirectory)
+            Description = "选择默认保存目录",
+            ShowNewFolderButton = true,
+            SelectedPath = Directory.Exists(_settings.SaveDirectory)
                 ? _settings.SaveDirectory
                 : Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)
         };
 
-        if (dialog.ShowDialog() != true) return;
-        SaveDirectory = dialog.FolderName;
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+        SaveDirectory = dialog.SelectedPath;
     }
 
     [RelayCommand]

@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using BiliDownloader.Core.BiliApi.Models;
 using BiliDownloader.Core.Errors;
 using BiliDownloader.Core.Models;
+using BiliDownloader.Core.Utils;
 
 namespace BiliDownloader.Core.BiliApi;
 
@@ -96,5 +97,5 @@ public static class DtoMapping
     public static string? NormalizeUrl(string? url) =>
         string.IsNullOrWhiteSpace(url) ? null
         : url.StartsWith("//", StringComparison.Ordinal) ? "https:" + url
-        : url.Replace("http://", "https://", StringComparison.OrdinalIgnoreCase);
+        : Net48.Replace(url, "http://", "https://", StringComparison.OrdinalIgnoreCase);
 }

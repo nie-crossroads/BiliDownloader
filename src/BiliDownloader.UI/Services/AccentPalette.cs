@@ -24,10 +24,11 @@ public sealed record AccentPreset(
     /// <summary>#RRGGBB 或 #AARRGGBB（令牌字典里的弱底色是后者）→ Color。静态是为了 ThemeService 也能复用。</summary>
     public static System.Windows.Media.Color Parse(string hex)
     {
-        var span = hex.TrimStart('#').AsSpan();
-        var value = uint.Parse(span, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+        // net48 没有 uint.Parse(ReadOnlySpan<char>, ...)，直接用字符串重载
+        var digits = hex.TrimStart('#');
+        var value = uint.Parse(digits, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
-        return span.Length == 8
+        return digits.Length == 8
             ? System.Windows.Media.Color.FromArgb((byte)(value >> 24), (byte)(value >> 16), (byte)(value >> 8), (byte)value)
             : System.Windows.Media.Color.FromRgb((byte)(value >> 16), (byte)(value >> 8), (byte)value);
     }
@@ -45,9 +46,6 @@ public static class AccentPalette
 
         new AccentPreset("Blue", "天空蓝", "#3B82F6", "#60A5FA", "#2563EB",
             "#1A3B82F6", "#243B82F6", "#1D4ED8", "#7CB0FF", "#7CB0FF", "#FFFFFF"),
-
-        new AccentPreset("Green", "薄荷绿", "#10B981", "#34D399", "#059669",
-            "#1A10B981", "#2410B981", "#047857", "#4ADE80", "#6EE7B7", "#052E1F"),
 
         new AccentPreset("Violet", "紫罗兰", "#8B5CF6", "#A78BFA", "#7C3AED",
             "#1A8B5CF6", "#248B5CF6", "#6D28D9", "#B69CFF", "#C4B5FD", "#FFFFFF"),

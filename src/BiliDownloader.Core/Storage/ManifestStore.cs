@@ -1,6 +1,7 @@
 using System.Text.Json;
 using BiliDownloader.Core.Download;
 using BiliDownloader.Core.FileName;
+using BiliDownloader.Core.Utils;
 
 namespace BiliDownloader.Core.Storage;
 
@@ -91,7 +92,7 @@ public static class ManifestStore
             var target = PathOf(saveDirectory);
             var staging = target + ".tmp";
             File.WriteAllText(staging, JsonSerializer.Serialize(manifest, Options));
-            File.Move(staging, target, overwrite: true);
+            Net48.MoveFile(staging, target, overwrite: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

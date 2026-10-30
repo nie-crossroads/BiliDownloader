@@ -2,4 +2,6 @@
   <Project Path="BiliDownloader.Core/BiliDownloader.Core.csproj" />
   <Project Path="BiliDownloader.Tests/BiliDownloader.Tests.csproj" />
   <Project Path="BiliDownloader.UI/BiliDownloader.UI.csproj" />
+  <Project Path="BiliDownloader.Installer/BiliDownloader.Installer.csproj" />
+  <Project Path="BiliDownloader.Uninstaller/BiliDownloader.Uninstaller.csproj" />
 </Solution>

@@ -1,0 +1,29 @@
+FFmpeg 许可声明（LGPL v2.1）
+================================
+
+本软件在分发时附带 FFmpeg（ffmpeg.exe），用于视频/音频流的混流与封装。
+
+FFmpeg 采用 GNU Lesser General Public License version 2.1（LGPL v2.1）构建，
+默认不包含任何 GPL 组件。FFmpeg 的部分可选组件以 GNU GPL 授权，但本构建未启用它们。
+
+主要版权：
+  Copyright (c) 2000-2024 the FFmpeg developers
+  FFmpeg 由 Fabrice Bellard 等人创立，现由 FFmpeg 项目组维护。
+  完整作者列表见 FFmpeg 源码中的 AUTHORS / MAINTAINERS 文件。
+
+LGPL v2.1 核心条款（摘要）：
+  - 您可以自由地重新分发本构建（二进制形式），无需开源您自己的应用程序。
+  - 若您修改了 FFmpeg 本身的库代码（libav*），或以静态链接方式将其并入
+    您分发的程序中，则必须向接收者提供相应的（经修改的）源代码，并允许
+    其替换所使用的 FFmpeg 库。
+  - 本软件仅以“按原样”方式使用 FFmpeg 的可执行文件，未修改其源码，
+    也未静态链接其库，因此不触发向本应用开源源代码之义务。
+
+FFmpeg 完整源码与许可证文本获取地址：
+  https://ffmpeg.org/download.html
+  https://git.ffmpeg.org/gitweb/ffmpeg.git
+
+LGPL v2.1 完整文本：
+  https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+
+请注意：FFmpeg 是独立第三方项目，与 BiliDownloader 无隶属关系。

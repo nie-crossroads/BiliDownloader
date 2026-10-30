@@ -38,7 +38,8 @@ public sealed class LogService : ILogService
     {
         if (!Enabled(level)) return;
 
-        var line = string.Create(CultureInfo.InvariantCulture,
+        // net48 没有 string.Create(IFormatProvider, 插值字符串) 这个 .NET 6 才有的重载
+        var line = FormattableString.Invariant(
             $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{(int)level}] {Sanitize(message)}");
 
         lock (_sync)

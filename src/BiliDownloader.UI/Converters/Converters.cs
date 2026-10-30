@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
+using BiliDownloader.Core.Utils;
 
 namespace BiliDownloader.UI.Converters;
 
@@ -14,7 +15,7 @@ public sealed class FractionWidthConverter : IMultiValueConverter
         if (values[1] is not double value) return 0d;
         if (values[2] is not double maximum || maximum <= 0) return 0d;
 
-        var fraction = Math.Clamp(value / maximum, 0, 1);
+        var fraction = Net48.Clamp(value / maximum, 0, 1);
         return width * fraction;
     }
 

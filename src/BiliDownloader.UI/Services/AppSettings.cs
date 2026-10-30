@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using BiliDownloader.Core.Download;
 using BiliDownloader.Core.FileName;
 using BiliDownloader.Core.Storage;
+using BiliDownloader.Core.Utils;
 
 namespace BiliDownloader.UI.Services;
 
@@ -178,7 +179,7 @@ public sealed class AppSettings
             Directory.CreateDirectory(dir);
             var tmp = FilePath + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(this, JsonOptions));
-            File.Move(tmp, FilePath, overwrite: true);
+            Net48.MoveFile(tmp, FilePath, overwrite: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -188,11 +189,11 @@ public sealed class AppSettings
 
     public void Normalize()
     {
-        MaxConcurrentTasks = Math.Clamp(MaxConcurrentTasks, 1, 8);
-        ConnectionsPerTask = Math.Clamp(ConnectionsPerTask, 1, 16);
+        MaxConcurrentTasks = Net48.Clamp(MaxConcurrentTasks, 1, 8);
+        ConnectionsPerTask = Net48.Clamp(ConnectionsPerTask, 1, 16);
         GlobalSpeedLimitKbps = Math.Max(0, GlobalSpeedLimitKbps);
-        RequestTimeoutSeconds = Math.Clamp(RequestTimeoutSeconds, 5, 300);
-        MaxRetries = Math.Clamp(MaxRetries, 0, 10);
+        RequestTimeoutSeconds = Net48.Clamp(RequestTimeoutSeconds, 5, 300);
+        MaxRetries = Net48.Clamp(MaxRetries, 0, 10);
         IndexPadding = IndexPadding == 3 ? 3 : 2;
 
         if (string.IsNullOrWhiteSpace(SaveDirectory)) SaveDirectory = StoragePaths.DefaultSaveDirectory();

@@ -11,6 +11,7 @@ using BiliDownloader.Core.Merge;
 using BiliDownloader.Core.Orchestration;
 using BiliDownloader.Core.Parse;
 using BiliDownloader.Core.Utils;
+using BiliDownloader.SetupShared;
 using BiliDownloader.UI.Services;
 using BiliDownloader.UI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -91,10 +92,40 @@ public partial class App : Application
         window.Show();
 
 
+        // 开发期 DPI 取证（--shot-real）：走 PrintWindow + DWM 合成抓真实像素。
+        // 与 --shot 的离屏渲染不同，这条路径能看出 PerMonitorV2 是否真的生效
+        // （125% 缩放下 1040 DIP 应输出 1300 物理像素，而不是被位图拉伸成 1040）。
+        if (args.Any(a => a.StartsWith("--shot-real", StringComparison.OrdinalIgnoreCase)))
+        {
+            var realDir = Path.Combine(Path.GetTempPath(), "bili_ui_real");
+            Directory.CreateDirectory(realDir);
+            var realFile = Path.Combine(realDir, "real-window.png");
+
+            window.Dispatcher.InvokeAsync(async () =>
+            {
+                try
+                {
+                    // 等布局、封面解码与主题应用完成，否则抓到的是半成品帧
+                    await Task.Delay(2200);
+                    WindowCapture.CaptureToPng(window, realFile);
+                    DiagnosticsShot.Trace($"shot-real -> {realFile}");
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticsShot.Trace("shot-real failed: " + ex);
+                }
+
+                window.Close();
+                Shutdown(0);
+            }, DispatcherPriority.ApplicationIdle);
+
+            return;
+        }
+
         // 开发期界面取证（--shot=<dir>），发行版不会走到这里
         if (DiagnosticsShot.IsRequested(args))
         {
-            DiagnosticsShot.Trace($"startup args=[{string.Join(' ', args)}]");
+            DiagnosticsShot.Trace($"startup args=[{string.Join(" ", args)}]");
             window.Dispatcher.InvokeAsync(async () =>
             {
                 try

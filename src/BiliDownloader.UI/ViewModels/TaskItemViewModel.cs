@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows.Threading;
 using BiliDownloader.Core.BiliApi;
 using BiliDownloader.Core.Models;
+using BiliDownloader.Core.Utils;
 using BiliDownloader.UI.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -117,7 +118,7 @@ public partial class TaskItemViewModel : ObservableObject
         // 终态（完成 / 失败 / 取消）不再排队，层叠收起，避免残留一堆没意义的卡背。
         StackDepth = task.Status.IsTerminal()
             ? 1
-            : Math.Clamp(task.Pages.Count, 1, 3);
+            : Net48.Clamp(task.Pages.Count, 1, 3);
 
         var completed = task.CompletedCount;
         if (completed > _completedSeen && !task.Status.IsTerminal())
@@ -193,7 +194,7 @@ public partial class TaskItemViewModel : ObservableObject
             _ => "等待中"
         };
 
-        Progress = Math.Clamp(task.Progress, 0, 1);
+        Progress = Net48.Clamp(task.Progress, 0, 1);
         ProgressText = $"{Progress:P0}".Replace(" ", string.Empty);
         SpeedText = task.Status switch
         {

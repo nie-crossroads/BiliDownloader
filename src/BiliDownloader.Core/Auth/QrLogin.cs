@@ -1,5 +1,4 @@
 using System.Net.Http;
-using System.Net.Http.Json;
 using System.Text.Json;
 using BiliDownloader.Core.BiliApi;
 using BiliDownloader.Core.BiliApi.Models;
@@ -55,7 +54,7 @@ public sealed class QrLogin : IQrLogin
             using var response = await _http.GetAsync(Endpoints.QrGenerate, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            var payload = await response.Content.ReadFromJsonAsync<QrGenerateResponse>(JsonOptions, ct)
+            var payload = await ReadJsonAsync<QrGenerateResponse>(response.Content, ct)
                           ?? throw BiliException.Network();
 
             if (payload.Code != 0 || payload.Data?.Url is null || payload.Data.QrCodeKey is null)
@@ -70,6 +69,16 @@ public sealed class QrLogin : IQrLogin
         }
     }
 
+    /// <summary>
+    /// net48 的 System.Net.Http 没有 ReadFromJsonAsync 扩展方法（那是 .NET 5 才加的），
+    /// 这里用 System.Text.Json 手写等价实现；CancellationToken 仍然作用在反序列化阶段。
+    /// </summary>
+    private static async Task<T?> ReadJsonAsync<T>(HttpContent content, CancellationToken ct)
+    {
+        using var stream = await content.ReadAsStreamAsync().ConfigureAwait(false);
+        return await JsonSerializer.DeserializeAsync<T>(stream, JsonOptions, ct).ConfigureAwait(false);
+    }
+
     public async Task<QrLoginResult> PollAsync(string key, CancellationToken ct = default)
     {
         var url = $"{Endpoints.QrPoll}?qrcode_key={Uri.EscapeDataString(key)}&source=main-feature";
@@ -79,7 +88,7 @@ public sealed class QrLogin : IQrLogin
             using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            var payload = await response.Content.ReadFromJsonAsync<QrPollResponse>(JsonOptions, ct)
+            var payload = await ReadJsonAsync<QrPollResponse>(response.Content, ct)
                           ?? throw BiliException.Network();
 
             if (payload.Code != 0 || payload.Data is null)

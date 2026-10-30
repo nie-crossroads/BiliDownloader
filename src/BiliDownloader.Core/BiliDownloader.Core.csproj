@@ -1,9 +1,36 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- 迁回 net48：运行时由 Win10 1903+ / Win11 系统自带（.NET Framework 4.8），
+         不再随安装包分发一整套 .NET 运行时（原本自包含单文件 166 MB）。 -->
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- net48 没有内置的 IsExternalInit / RequiredMemberAttribute，补 polyfill 文件 -->
+    <NoWarn>$(NoWarn);CS0436</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <PackageReference Include="System.Memory" Version="4.5.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\Polyfills.cs" Link="Polyfills\Polyfills.cs" />
+    <!-- TimeProvider 是 public 类型，只能由 Core 编译一份；UI 通过项目引用使用 -->
+    <Compile Include="..\Shared\TimeProviderPolyfill.cs" Link="Polyfills\TimeProviderPolyfill.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- net48 的隐式 using 集合不含 System.Net.Http，补一个全局 using，
+         免得每个用到 HttpClient 的文件都要手写 -->
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- net48 里 System.Net.Http 是独立程序集，不像 .NET Core 那样默认引用 -->
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
 
 </Project>

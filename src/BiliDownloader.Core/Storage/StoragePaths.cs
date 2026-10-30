@@ -1,4 +1,5 @@
 using System.IO;
+using BiliDownloader.Core.Utils;
 
 namespace BiliDownloader.Core.Storage;
 
@@ -70,7 +71,7 @@ public static class StoragePaths
             {
                 try
                 {
-                    File.Move(staging, desiredPath, overwrite: true);
+                    Net48.MoveFile(staging, desiredPath, overwrite: true);
                     TryDelete(tempFile);
                     return desiredPath;
                 }
@@ -85,7 +86,7 @@ public static class StoragePaths
                 var finalPath = EnsureUnique(desiredPath);
                 try
                 {
-                    File.Move(staging, finalPath, overwrite: false);
+                    Net48.MoveFile(staging, finalPath, overwrite: false);
                     TryDelete(tempFile);
                     return finalPath;
                 }

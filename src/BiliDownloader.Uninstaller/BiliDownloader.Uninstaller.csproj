@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- 刻意用 .NET Framework 4.8 而不是 net10.0-windows：
+         Win10 1903+ / Win11 系统自带 4.8，卸载器不必自带一整套运行时。
+         WPF 自包含发布时它是 63 MB，这让安装包平白多背一份运行时。 -->
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>uninstall</AssemblyName>
+    <RootNamespace>BiliDownloader.Uninstaller</RootNamespace>
+    <ApplicationIcon>..\BiliDownloader.UI\Resources\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <!-- 共享源文件（链接，避免重复维护） -->
+  <ItemGroup>
+    <!-- ShellShortcut 用 dynamic 调 WScript.Shell COM，.NET Framework 需要显式引用 Microsoft.CSharp -->
+    <Reference Include="Microsoft.CSharp" />
+    <Compile Include="..\SetupShared\ProductInfo.cs" Link="Shared\ProductInfo.cs" />
+    <Compile Include="..\SetupShared\UninstallRegistry.cs" Link="Shared\UninstallRegistry.cs" />
+    <Compile Include="..\SetupShared\RelayCommand.cs" Link="Shared\RelayCommand.cs" />
+    <Compile Include="..\SetupShared\ShellShortcut.cs" Link="Shared\ShellShortcut.cs" />
+    <Compile Include="..\SetupShared\WindowChromeHelper.cs" Link="Shared\WindowChromeHelper.cs" />
+    <Compile Include="..\SetupShared\WindowCapture.cs" Link="Shared\WindowCapture.cs" />
+  </ItemGroup>
+
+  <!-- 本地 XAML（App.xaml / 各 View）由 SDK 自动包含；仅显式声明跨项目链接的样式。 -->
+  <ItemGroup>
+    <Page Include="..\BiliDownloader.Installer\Styles\InstallerStyles.xaml" Link="Styles\InstallerStyles.xaml" />
+  </ItemGroup>
+
+</Project>

@@ -8,6 +8,7 @@ using BiliDownloader.Core.Merge;
 using BiliDownloader.Core.Models;
 using BiliDownloader.Core.Parse;
 using BiliDownloader.Core.Storage;
+using BiliDownloader.Core.Utils;
 
 namespace BiliDownloader.Core.Orchestration;
 
@@ -89,8 +90,8 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
 
     public VideoTask Enqueue(DownloadRequest request)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (request is null) throw new ArgumentNullException(nameof(request));
+        if (_disposed) throw new ObjectDisposedException(nameof(VideoDownloadService));
         if (request.Cids.Count == 0)
             throw new ArgumentException("至少选择一个分 P", nameof(request));
 
@@ -261,11 +262,11 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
                 // 只有真正下完的页保持原状，其余一律置为「已暂停」等用户点继续；
                 // 下载中途的状态（Downloading / Merging）在重启后没有意义。
                 Status = p.Status is nameof(DownloadStatus.Completed) or nameof(DownloadStatus.Skipped)
-                    ? Enum.Parse<DownloadStatus>(p.Status)
+                    ? (DownloadStatus)Enum.Parse(typeof(DownloadStatus), p.Status)
                     : DownloadStatus.Paused,
                 ReceivedBytes = p.ReceivedBytes,
                 TotalBytes = p.TotalBytes,
-                Progress = p.TotalBytes > 0 ? Math.Clamp((double)p.ReceivedBytes / p.TotalBytes, 0, 1) : 0,
+                Progress = p.TotalBytes > 0 ? Net48.Clamp((double)p.ReceivedBytes / p.TotalBytes, 0, 1) : 0,
                 TempDir = StoragePaths.PageTempDir(saveDirectory, entry.TaskId, p.Cid),
                 VideoFingerprint = p.Video,
                 AudioFingerprint = p.Audio
@@ -470,7 +471,7 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
         {
             page.ReceivedBytes = p.ReceivedBytes;
             page.Progress = page.TotalBytes > 0
-                ? DownloadWeight * Math.Clamp((double)p.ReceivedBytes / page.TotalBytes, 0, 1)
+                ? DownloadWeight * Net48.Clamp((double)p.ReceivedBytes / page.TotalBytes, 0, 1)
                 : 0;
             ReportPageProgress(rt, page, p.SpeedBytesPerSecond);
         });
@@ -486,7 +487,7 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
             {
                 page.ReceivedBytes = videoLen + p.ReceivedBytes;
                 page.Progress = page.TotalBytes > 0
-                    ? DownloadWeight * Math.Clamp((double)page.ReceivedBytes / page.TotalBytes, 0, 1)
+                    ? DownloadWeight * Net48.Clamp((double)page.ReceivedBytes / page.TotalBytes, 0, 1)
                     : 0;
                 ReportPageProgress(rt, page, p.SpeedBytesPerSecond);
             });
@@ -507,7 +508,7 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
         var outputPath = Path.Combine(tempDir, "out.mp4");
         var mergeProgress = new DirectProgress<MergeProgress>(p =>
         {
-            page.Progress = DownloadWeight + (1 - DownloadWeight) * Math.Clamp(p.Percent / 100, 0, 1);
+            page.Progress = DownloadWeight + (1 - DownloadWeight) * Net48.Clamp(p.Percent / 100, 0, 1);
             ReportPageProgress(rt, page, 0);
         });
 
@@ -588,8 +589,9 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
 
         var weights = task.Pages.Select(p => p.TotalBytes > 0 ? p.TotalBytes : Math.Max(1, (long)p.Duration.TotalSeconds));
         var totalWeight = Math.Max(1, weights.Sum());
-        var done = task.Pages.Zip(weights).Sum(t => t.First.Progress * t.Second);
-        task.Progress = Math.Clamp(done / totalWeight, 0, 1);
+        // net48 的 Enumerable.Zip 没有「返回元组」的单参数重载，用带投影的双序列版本
+        var done = task.Pages.Zip(weights, (page, weight) => page.Progress * weight).Sum();
+        task.Progress = Net48.Clamp(done / totalWeight, 0, 1);
 
         // 事件节流 ≤10 次/秒（§5.4）
         var now = Stopwatch.GetTimestamp();

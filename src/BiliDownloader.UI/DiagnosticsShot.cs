@@ -40,13 +40,13 @@ internal static class DiagnosticsShot
 
     private static string? ArgValue(string[] args, string name) =>
         args.FirstOrDefault(a => a.StartsWith(name + "=", StringComparison.OrdinalIgnoreCase))
-            ?.Split('=', 2)[1].Trim('"');
+            ?.Split(new[] { '=' }, 2)[1].Trim('"');
 
     public static async Task RunAsync(MainWindow window, MainViewModel vm, string[] args)
     {
         Trace("RunAsync enter");
         var dir = ArgValue(args, "--shot")!;
-        Trace($"dir=[{dir}] args=[{string.Join(' ', args)}]");
+        Trace($"dir=[{dir}] args=[{string.Join(" ", args)}]");
         Directory.CreateDirectory(dir);
         var url = ArgValue(args, "--parse");
         var wantDownload = args.Contains("--download");
@@ -292,7 +292,9 @@ internal static class DiagnosticsShot
         }
 
         report.AppendLine("--- log tail");
-        foreach (var entry in vm.Logs.TakeLast(40))
+        // net48 的 Enumerable 没有 TakeLast（.NET Core 2.0+），手动跳过前面的部分
+        var logTail = vm.Logs.Skip(Math.Max(0, vm.Logs.Count - 40));
+        foreach (var entry in logTail)
             report.AppendLine($"[{entry.Time}] {entry.LevelText,-5} {entry.Text}");
 
         File.WriteAllText(Path.Combine(dir, "report.txt"), report.ToString());
@@ -432,7 +434,7 @@ internal static class DiagnosticsShot
         var top = histogram.OrderByDescending(kv => kv.Value).Take(3)
             .Select(kv => $"#{(kv.Key >> 10 & 31) * 8:X2}{(kv.Key >> 5 & 31) * 8:X2}{(kv.Key & 31) * 8:X2} {kv.Value * 100.0 / total:0.0}%");
 
-        return string.Create(System.Globalization.CultureInfo.InvariantCulture,
+        return FormattableString.Invariant(
             $"colors={histogram.Count,5} accent={accent * 100.0 / total,5:0.00}% dark={dark * 100.0 / total,5:0.0}% light={light * 100.0 / total,5:0.0}% lum={lumSum / total,5:0.0} top=[{string.Join(", ", top)}]");
     }
 }

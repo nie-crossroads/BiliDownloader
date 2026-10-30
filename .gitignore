@@ -2,6 +2,9 @@
 bin/
 obj/
 publish/
+dist/
+# 安装器载荷的预压缩产物（约 95 MB，由 scripts/pack-payload.ps1 生成）
+build/
 [Dd]ebug/
 [Rr]elease/
 *.user
@@ -61,3 +64,4 @@ desktop.ini
 视觉规范.md
 design/
 视频下载文件夹/
+未完成功能清单.md

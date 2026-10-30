@@ -9,10 +9,8 @@ namespace BiliDownloader.UI.Services;
 /// </summary>
 public static class ImageCache
 {
-    private static readonly HttpClient Http = new(new SocketsHttpHandler
-    {
-        PooledConnectionLifetime = TimeSpan.FromMinutes(5)
-    })
+    // net48 没有 SocketsHttpHandler；连接回收交给 ServicePointManager 的全局空闲上限
+    private static readonly HttpClient Http = new(new HttpClientHandler())
     {
         Timeout = TimeSpan.FromSeconds(15)
     };
@@ -30,7 +28,12 @@ public static class ImageCache
 
         try
         {
-            var bytes = await Http.GetByteArrayAsync(url, ct).ConfigureAwait(false);
+            // net48 的 GetByteArrayAsync 没有 CancellationToken 重载：
+            // 用 GetAsync(带 ct) 取到响应头，再读字节（此时数据已在管道里）
+            using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)
+                .ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            var bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
             return FromBytes(bytes, decodePixelWidth);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)

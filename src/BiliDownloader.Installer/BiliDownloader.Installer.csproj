@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- .NET Framework 4.8：Win10 1903+ / Win11 系统自带，安装包因此不必附带 .NET 运行时。
+         实测可省约 60 MB（.NET 10 自包含 WPF 运行时 Deflate 后约 60.3 MB）。 -->
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>BiliDownloader.Setup</AssemblyName>
+    <RootNamespace>BiliDownloader.Installer</RootNamespace>
+    <ApplicationIcon>..\BiliDownloader.UI\Resources\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- 载荷约 245 MB，必须跑 64 位进程，避免 32 位地址空间下映射大资源出问题。 -->
+    <Prefer32Bit>false</Prefer32Bit>
+    <!-- 交付物只要 exe，不要 pdb。 -->
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <!-- 共享源文件（链接，避免重复维护） -->
+  <ItemGroup>
+    <Compile Include="..\SetupShared\ProductInfo.cs" Link="Shared\ProductInfo.cs" />
+    <Compile Include="..\SetupShared\UninstallRegistry.cs" Link="Shared\UninstallRegistry.cs" />
+    <Compile Include="..\SetupShared\RelayCommand.cs" Link="Shared\RelayCommand.cs" />
+    <Compile Include="..\SetupShared\ShellShortcut.cs" Link="Shared\ShellShortcut.cs" />
+    <Compile Include="..\SetupShared\WindowChromeHelper.cs" Link="Shared\WindowChromeHelper.cs" />
+    <Compile Include="..\SetupShared\WindowCapture.cs" Link="Shared\WindowCapture.cs" />
+  </ItemGroup>
+
+  <!-- net48 下 dynamic（ShellShortcut 用 WScript.Shell 创建快捷方式）需要显式引用该框架程序集，
+       .NET 10 是内置的。 -->
+  <ItemGroup>
+    <Reference Include="Microsoft.CSharp" />
+    <!-- net48 中 ZipArchive 在独立程序集里（.NET Core 下属于框架） -->
+    <Reference Include="System.IO.Compression" />
+  </ItemGroup>
+
+  <!-- 本地 XAML（App.xaml / 各 View / Styles）由 SDK 自动作为 Page/ApplicationDefinition 包含。 -->
+
+  <!-- 窗口头部与任务栏共用同一份图标，保证两处视觉完全一致。
+       ApplicationIcon 是 Win32 资源（任务栏 / 资源管理器），Resource 是 WPF 资源（界面引用）。 -->
+  <ItemGroup>
+    <Resource Include="..\BiliDownloader.UI\Resources\app.ico" Link="Resources\app.ico" />
+  </ItemGroup>
+
+  <!-- 载荷：主程序目录 + FFmpeg + 许可 + 独立卸载器。
+       主程序迁回 net48 后没有 PublishSingleFile，产物是 19 个文件，
+       因此打包成 payload.app.zip（zip 自带压缩，不再套外层 Deflate）；
+       其余单文件载荷仍由 scripts\pack-payload.ps1 预压成 [8 字节长度][Deflate] 格式。 -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\build\payload\payload.app.zip" LogicalName="payload.app" />
+    <EmbeddedResource Include="..\..\build\payload\payload.ffmpeg.def" LogicalName="payload.ffmpeg" />
+    <EmbeddedResource Include="..\..\build\payload\payload.license.def" LogicalName="payload.license" />
+    <EmbeddedResource Include="..\..\build\payload\payload.uninstall.def" LogicalName="payload.uninstall" />
+    <EmbeddedResource Include="..\..\build\payload\payload.uninstallcfg.def" LogicalName="payload.uninstallcfg" />
+  </ItemGroup>
+
+  <!-- 构建前自动压缩载荷（脚本内部按时间戳跳过，不会重复压）。 -->
+  <Target Name="PackPayload" BeforeTargets="BeforeBuild"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\..\scripts\pack-payload.ps1&quot;" />
+  </Target>
+
+</Project>

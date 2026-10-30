@@ -1,4 +1,5 @@
 using BiliDownloader.Core.Errors;
+using BiliDownloader.Core.Utils;
 
 namespace BiliDownloader.Core.Merge;
 
@@ -64,7 +65,8 @@ public sealed class FfmpegMerger : IFfmpegMerger
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
-        foreach (var a in args) psi.ArgumentList.Add(a);
+        // net48 没有 ArgumentList，按 Windows 命令行规则自行加引号（路径含空格时必须）
+        psi.Arguments = Net48.BuildCommandLine(args);
 
         using var process = new System.Diagnostics.Process { StartInfo = psi };
         var errorTail = new Queue<string>();
@@ -75,10 +77,10 @@ public sealed class FfmpegMerger : IFfmpegMerger
             if (string.IsNullOrWhiteSpace(line)) return;
 
             if (line.StartsWith("out_time_us=", StringComparison.Ordinal) &&
-                long.TryParse(line.AsSpan("out_time_us=".Length), out var micro) &&
+                long.TryParse(line.Substring("out_time_us=".Length), out var micro) &&
                 request.Duration.TotalSeconds > 0)
             {
-                var percent = Math.Clamp(micro / 1_000_000.0 / request.Duration.TotalSeconds, 0, 1);
+                var percent = Net48.Clamp(micro / 1_000_000.0 / request.Duration.TotalSeconds, 0, 1);
                 progress?.Report(new MergeProgress(percent * 100));
             }
         };
@@ -98,7 +100,7 @@ public sealed class FfmpegMerger : IFfmpegMerger
 
         try
         {
-            await process.WaitForExitAsync(ct).ConfigureAwait(false);
+            await Net48.WaitForExitAsync(process, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -122,7 +124,7 @@ public sealed class FfmpegMerger : IFfmpegMerger
     {
         try
         {
-            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            if (!process.HasExited) Net48.KillProcessTree(process);
         }
         catch (InvalidOperationException)
         {

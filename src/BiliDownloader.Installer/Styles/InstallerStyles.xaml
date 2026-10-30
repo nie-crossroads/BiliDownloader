@@ -1,0 +1,337 @@
+<!--
+  InstallerStyles.xaml — 安装/卸载向导共享视觉令牌与控件样式
+  严格对齐 design/installer.html 的「静流」浅色体系。
+  深色令牌已备好（ToggleTheme 可切换），默认浅色。
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ===================== 浅色令牌（默认） ===================== -->
+  <Color x:Key="C.Bg">#F4F6F9</Color>
+  <Color x:Key="C.Surface">#FFFFFF</Color>
+  <Color x:Key="C.Surface2">#EEF1F6</Color>
+  <Color x:Key="C.Surface3">#E4E9F0</Color>
+  <Color x:Key="C.Line">#E1E6EE</Color>
+  <Color x:Key="C.Line2">#CDD5E0</Color>
+  <Color x:Key="C.Fg">#151922</Color>
+  <Color x:Key="C.Fg2">#5B6472</Color>
+  <Color x:Key="C.Fg3">#737C8C</Color>
+  <Color x:Key="C.Accent">#FB7299</Color>
+  <Color x:Key="C.AccentHover">#FF8CAD</Color>
+  <Color x:Key="C.AccentPress">#E45D85</Color>
+  <Color x:Key="C.AccentSoft">#FB7299</Color>
+  <Color x:Key="C.Ok">#0C9C72</Color>
+  <Color x:Key="C.Danger">#D93A4A</Color>
+  <Color x:Key="C.DangerHover">#E5485A</Color>
+  <Color x:Key="C.DangerSoft">#D93A4A</Color>
+  <Color x:Key="C.OnAccent">#FFFFFF</Color>
+  <Color x:Key="C.Hover">#101828</Color>
+
+  <SolidColorBrush x:Key="Bg" Color="{StaticResource C.Bg}"/>
+  <SolidColorBrush x:Key="Surface" Color="{StaticResource C.Surface}"/>
+  <SolidColorBrush x:Key="Surface2" Color="{StaticResource C.Surface2}"/>
+  <SolidColorBrush x:Key="Surface3" Color="{StaticResource C.Surface3}"/>
+  <SolidColorBrush x:Key="Line" Color="{StaticResource C.Line}"/>
+  <SolidColorBrush x:Key="Line2" Color="{StaticResource C.Line2}"/>
+  <SolidColorBrush x:Key="Fg" Color="{StaticResource C.Fg}"/>
+  <SolidColorBrush x:Key="Fg2" Color="{StaticResource C.Fg2}"/>
+  <SolidColorBrush x:Key="Fg3" Color="{StaticResource C.Fg3}"/>
+  <SolidColorBrush x:Key="Accent" Color="{StaticResource C.Accent}"/>
+  <SolidColorBrush x:Key="AccentHover" Color="{StaticResource C.AccentHover}"/>
+  <SolidColorBrush x:Key="AccentPress" Color="{StaticResource C.AccentPress}"/>
+  <SolidColorBrush x:Key="AccentSoft" Color="{StaticResource C.Accent}" Opacity="0.10"/>
+  <SolidColorBrush x:Key="Ok" Color="{StaticResource C.Ok}"/>
+  <SolidColorBrush x:Key="OkSoft" Color="{StaticResource C.Ok}" Opacity="0.13"/>
+  <SolidColorBrush x:Key="Danger" Color="{StaticResource C.Danger}"/>
+  <SolidColorBrush x:Key="DangerHover" Color="{StaticResource C.DangerHover}"/>
+  <SolidColorBrush x:Key="DangerSoft" Color="{StaticResource C.Danger}" Opacity="0.13"/>
+  <SolidColorBrush x:Key="OnAccent" Color="{StaticResource C.OnAccent}"/>
+  <SolidColorBrush x:Key="Hover" Color="{StaticResource C.Hover}" Opacity="0.05"/>
+
+  <!-- 品牌色 -->
+  <SolidColorBrush x:Key="BrandDark" Color="#14171E"/>
+
+  <!-- 圆角 -->
+  <CornerRadius x:Key="R.Xs">4</CornerRadius>
+  <CornerRadius x:Key="R.Sm">6</CornerRadius>
+  <CornerRadius x:Key="R.Md">10</CornerRadius>
+  <CornerRadius x:Key="R.Lg">14</CornerRadius>
+  <CornerRadius x:Key="R.Full">999</CornerRadius>
+
+  <!-- 窗口阴影 -->
+  <DropShadowEffect x:Key="ShadowWin" Color="#171F32" Opacity="0.26" BlurRadius="60" ShadowDepth="30" Direction="270"/>
+
+  <!-- ===================== 按钮：圆角 + 品牌色 ===================== -->
+  <ControlTemplate x:Key="RoundedButtonTemplate" TargetType="Button">
+    <Border x:Name="bd" Background="{TemplateBinding Background}"
+            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+            CornerRadius="{TemplateBinding Tag}">
+      <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"/>
+    </Border>
+  </ControlTemplate>
+
+  <Style x:Key="BtnBase" TargetType="Button">
+    <Setter Property="Template" Value="{StaticResource RoundedButtonTemplate}"/>
+    <Setter Property="Tag" Value="{StaticResource R.Md}"/>
+    <Setter Property="Height" Value="36"/>
+    <Setter Property="Padding" Value="18,0"/>
+    <Setter Property="FontSize" Value="12.5"/>
+    <Setter Property="FontWeight" Value="Medium"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
+
+  <Style x:Key="BtnPrimary" BasedOn="{StaticResource BtnBase}" TargetType="Button">
+    <Setter Property="Background" Value="{DynamicResource Accent}"/>
+    <Setter Property="Foreground" Value="{DynamicResource OnAccent}"/>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{DynamicResource AccentHover}"/>
+      </Trigger>
+      <Trigger Property="IsPressed" Value="True">
+        <Setter Property="Background" Value="{DynamicResource AccentPress}"/>
+      </Trigger>
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        <Setter Property="Opacity" Value="0.42"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style x:Key="BtnSecondary" BasedOn="{StaticResource BtnBase}" TargetType="Button">
+    <Setter Property="Background" Value="{DynamicResource Surface2}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{DynamicResource Surface3}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Line2}"/>
+      </Trigger>
+      <Trigger Property="IsPressed" Value="True">
+        <Setter Property="Background" Value="{DynamicResource Surface3}"/>
+      </Trigger>
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter Property="Opacity" Value="0.42"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style x:Key="BtnDanger" BasedOn="{StaticResource BtnBase}" TargetType="Button">
+    <Setter Property="Background" Value="{DynamicResource Danger}"/>
+    <Setter Property="Foreground" Value="#FFFFFF"/>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{DynamicResource DangerHover}"/>
+      </Trigger>
+      <Trigger Property="IsPressed" Value="True">
+        <Setter Property="Background" Value="{DynamicResource Danger}"/>
+      </Trigger>
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter Property="Opacity" Value="0.42"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style x:Key="BtnGhost" BasedOn="{StaticResource BtnBase}" TargetType="Button">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}"/>
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{DynamicResource Hover}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+      </Trigger>
+      <Trigger Property="IsPressed" Value="True">
+        <Setter Property="Background" Value="{DynamicResource Hover}"/>
+      </Trigger>
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter Property="Opacity" Value="0.42"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style x:Key="BtnSm" BasedOn="{StaticResource BtnSecondary}" TargetType="Button">
+    <Setter Property="Height" Value="36"/>
+    <Setter Property="Padding" Value="14,0"/>
+    <Setter Property="FontSize" Value="12"/>
+  </Style>
+
+  <!-- ===================== 自绘复选框 ===================== -->
+  <Style x:Key="ChkBox" TargetType="CheckBox">
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="CheckBox">
+          <Grid x:Name="root" Height="30" Background="Transparent">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Border x:Name="box" Width="16" Height="16" CornerRadius="4" Grid.Column="0"
+                    BorderThickness="1" BorderBrush="{DynamicResource Line2}"
+                    Background="{DynamicResource Surface2}" VerticalAlignment="Center"/>
+            <Path x:Name="chk" Width="16" Height="16" Grid.Column="0" VerticalAlignment="Center"
+                  Stretch="None" Visibility="Collapsed"
+                  Data="M3.7,8.3 L6.6,11.2 L12.4,4.8"
+                  Stroke="{DynamicResource OnAccent}" StrokeThickness="1.9"
+                  StrokeEndLineCap="Round" StrokeStartLineCap="Round" StrokeLineJoin="Round"/>
+            <ContentPresenter Grid.Column="1" VerticalAlignment="Center" Margin="9,0,0,0"
+                              Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                              RecognizesAccessKey="True"/>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="box" Property="Background" Value="{DynamicResource Accent}"/>
+              <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+              <Setter TargetName="chk" Property="Visibility" Value="Visible"/>
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="root" Property="Opacity" Value="1"/>
+              <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+            </Trigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsChecked" Value="True"/>
+                <Condition Property="IsMouseOver" Value="True"/>
+              </MultiTrigger.Conditions>
+              <Setter TargetName="box" Property="Background" Value="{DynamicResource AccentHover}"/>
+            </MultiTrigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- 品牌标记：深色圆角方块 + 白色 V + 粉色条 -->
+  <Style x:Key="Brandmark" TargetType="Border">
+    <Setter Property="Width" Value="26"/>
+    <Setter Property="Height" Value="26"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Background" Value="{DynamicResource BrandDark}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="BorderBrush" Value="#1AFFFFFF"/>
+  </Style>
+
+  <!-- ===================== 文案样式（还原设计稿排版） ===================== -->
+  <Style x:Key="Wt" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="16"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+    <Setter Property="Margin" Value="0,0,0,6"/>
+  </Style>
+  <Style x:Key="Wd" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}"/>
+    <Setter Property="LineHeight" Value="20"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+    <Setter Property="Margin" Value="0,0,0,18"/>
+  </Style>
+  <Style x:Key="Lbl" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="{DynamicResource Fg3}"/>
+    <Setter Property="Margin" Value="0,0,0,7"/>
+  </Style>
+  <Style x:Key="PathText" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+  <Style x:Key="SubInfo" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="{DynamicResource Fg3}"/>
+    <Setter Property="Margin" Value="0,7,0,0"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+
+  <Style x:Key="Field" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource Surface2}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{StaticResource R.Md}"/>
+    <Setter Property="Height" Value="36"/>
+    <Setter Property="Padding" Value="11,0"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+
+  <Style x:Key="LicBox" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource Surface}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{StaticResource R.Md}"/>
+    <Setter Property="Padding" Value="10,12"/>
+    <Setter Property="Margin" Value="0,16,0,0"/>
+  </Style>
+  <Style x:Key="LicText" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="{DynamicResource Fg3}"/>
+    <Setter Property="LineHeight" Value="18"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+
+  <!-- 页脚：顶部分隔线 + 左右布局 -->
+  <Style x:Key="FootBorder" TargetType="Border">
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+    <Setter Property="BorderThickness" Value="0,1,0,0"/>
+    <Setter Property="Height" Value="56"/>
+    <Setter Property="Padding" Value="18,0"/>
+  </Style>
+  <Style x:Key="FootLeft" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Foreground" Value="{DynamicResource Fg3}"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+  </Style>
+
+  <!-- 卸载对话框文本 -->
+  <Style x:Key="DlgBody" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Foreground" Value="{DynamicResource Fg2}"/>
+    <Setter Property="LineHeight" Value="21"/>
+    <Setter Property="TextWrapping" Value="Wrap"/>
+  </Style>
+  <Style x:Key="WarnLine" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource Surface}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="{StaticResource R.Sm}"/>
+    <Setter Property="Padding" Value="8,10"/>
+    <Setter Property="Margin" Value="0,12,0,0"/>
+  </Style>
+
+  <!-- 进度条：与主程序 TaskProgress（Themes/Components.xaml）逐项对齐 ——
+       6px 高、圆角 3（= 高/2）、渐变 #FB7299→#FF9FC0、无扫光动画。
+       注意 CornerRadius 不能写 99：CSS 的 border-radius:99px 会自动收敛到 高/2，
+       WPF 的 Border 不会，圆弧会被按宽高比压扁，6px 高的条两端会渲染成楔形尖角。 -->
+  <LinearGradientBrush x:Key="ProgressBarFill" StartPoint="0,0" EndPoint="1,0">
+    <GradientStop Offset="0" Color="#FB7299"/>
+    <GradientStop Offset="1" Color="#FF9FC0"/>
+  </LinearGradientBrush>
+
+  <Style x:Key="SetupProgress" TargetType="ProgressBar">
+    <Setter Property="Height" Value="6"/>
+    <Setter Property="Minimum" Value="0"/>
+    <Setter Property="Maximum" Value="100"/>
+    <Setter Property="Foreground" Value="{StaticResource ProgressBarFill}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ProgressBar">
+          <!-- PART_Track / PART_Indicator 是 ProgressBar 的固定模板契约，
+               控件自身按 Value/Maximum 计算 Indicator 宽度，无需转换器。 -->
+          <Grid x:Name="PART_Track" Background="Transparent">
+            <Border Height="6" CornerRadius="3" Background="{DynamicResource Surface3}"/>
+            <Border x:Name="PART_Indicator" Height="6" CornerRadius="3"
+                    HorizontalAlignment="Left" Background="{TemplateBinding Foreground}"/>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+</ResourceDictionary>

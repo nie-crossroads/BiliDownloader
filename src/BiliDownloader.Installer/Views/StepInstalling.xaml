@@ -1,0 +1,38 @@
+<UserControl x:Class="BiliDownloader.Installer.Views.StepInstalling"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:BiliDownloader.Installer.Views">
+  <StackPanel>
+    <StackPanel Margin="20,20,20,18">
+      <TextBlock Text="正在安装…" Style="{StaticResource Wt}"/>
+      <TextBlock Text="请稍候，不要关闭这个窗口。" Style="{StaticResource Wd}"/>
+
+      <!-- 进度条与主程序任务卡片的 TaskProgress 保持同一套视觉：6px、圆角 3、同一条渐变、无扫光。 -->
+      <Grid Margin="0,2,0,16">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <ProgressBar Grid.Column="0" Style="{StaticResource SetupProgress}"
+                     Value="{Binding Percent, Mode=OneWay}"
+                     VerticalAlignment="Center" IsHitTestVisible="False"/>
+        <TextBlock Grid.Column="1" Style="{StaticResource SubInfo}" Margin="10,0,0,0"
+                   Text="{Binding Percent, StringFormat={}{0}%}" VerticalAlignment="Center"/>
+      </Grid>
+
+      <StackPanel>
+        <local:SubStepRow Title="复制程序文件" State="{Binding StepCopy}"/>
+        <local:SubStepRow Title="释放 FFmpeg（ffmpeg.exe）" State="{Binding StepFfmpeg}"/>
+        <local:SubStepRow Title="创建快捷方式" State="{Binding StepShortcut}"/>
+        <local:SubStepRow Title="注册卸载信息" State="{Binding StepRegister}"/>
+      </StackPanel>
+    </StackPanel>
+
+    <Border Style="{StaticResource FootBorder}">
+      <DockPanel LastChildFill="False" VerticalAlignment="Center">
+        <TextBlock DockPanel.Dock="Left" Style="{StaticResource FootLeft}" Text="{Binding WrittenInfo}"/>
+        <Button DockPanel.Dock="Right" Style="{StaticResource BtnSecondary}" Content="取消" Command="{Binding CancelCommand}"/>
+      </DockPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

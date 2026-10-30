@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using BiliDownloader.Core.Utils;
 
 namespace BiliDownloader.Core.Auth;
 
@@ -33,11 +34,11 @@ public sealed class DpapiCredentialStore : ICredentialStore
     public async Task<Credential?> LoadAsync(CancellationToken ct = default)
     {
         if (Current is not null) return Current;
-        if (!OperatingSystem.IsWindows() || !File.Exists(_path)) return null;
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || !File.Exists(_path)) return null;
 
         try
         {
-            var protectedBytes = await File.ReadAllBytesAsync(_path, ct).ConfigureAwait(false);
+            var protectedBytes = await Net48.ReadAllBytesAsync(_path, ct).ConfigureAwait(false);
             var plain = Unprotect(protectedBytes);
             if (plain is null) return null;
 
@@ -54,7 +55,7 @@ public sealed class DpapiCredentialStore : ICredentialStore
     public async Task SaveAsync(Credential credential, CancellationToken ct = default)
     {
         Current = credential;
-        if (!OperatingSystem.IsWindows()) return;
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
 
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
         var json = JsonSerializer.SerializeToUtf8Bytes(credential);
@@ -62,8 +63,8 @@ public sealed class DpapiCredentialStore : ICredentialStore
 
         // 临时文件 + 替换，避免半写
         var tmp = _path + ".tmp";
-        await File.WriteAllBytesAsync(tmp, protectedBytes, ct).ConfigureAwait(false);
-        File.Move(tmp, _path, overwrite: true);
+        await Net48.WriteAllBytesAsync(tmp, protectedBytes, ct).ConfigureAwait(false);
+        Net48.MoveFile(tmp, _path, overwrite: true);
     }
 
     public void Clear()
@@ -79,13 +80,13 @@ public sealed class DpapiCredentialStore : ICredentialStore
         }
     }
 
-    private static byte[] Protect(byte[] plain) => OperatingSystem.IsWindows()
+    private static byte[] Protect(byte[] plain) => RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
         ? Dpapi.Protect(plain, Entropy)
         : plain;
 
     private static byte[]? Unprotect(byte[] cipher)
     {
-        if (!OperatingSystem.IsWindows()) return cipher;
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return cipher;
         try
         {
             return Dpapi.Unprotect(cipher, Entropy);

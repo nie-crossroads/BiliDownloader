@@ -2,7 +2,7 @@
 
 一个 Windows 桌面端的 B 站视频下载工具：**粘贴链接 → 解析 → 选画质 → 下载**，下载后的音视频由 FFmpeg 合并成单个 MP4。
 
-界面是 WPF 自绘（无边框窗口 + Win11 圆角），支持浅色 / 深色双主题和 5 套预制主题色；Core 层与 UI 层完全解耦，Core 不依赖任何 WPF 类型，可以被命令行或服务端复用。
+界面是 WPF 自绘（无边框窗口 + Win11 圆角），支持浅色 / 深色双主题和 4 套预制主题色；Core 层与 UI 层完全解耦，Core 不依赖任何 WPF 类型，可以被命令行或服务端复用。
 
 > v1 定位：单视频 / 多 P 选集的离线备份。付费（充电专属）内容与合集（ugc_season）**不支持下载**，解析时会明确提示。
 > 代码规范、行为红线与提交格式见 [AGENTS.md](./AGENTS.md)。
@@ -24,7 +24,7 @@
 | 并发分片 | 设置里「单任务连接数」> 1 时按片并发：每片写独立的 `.partN`，全部完成后拼回主文件。主文件里始终是连续前缀，中途把连接数改回 1 也不会损坏文件 |
 | 全局限速 | 共享令牌桶，所有任务与所有分片共用一个预算，设置页改动即时生效 |
 | 并发与重试 | 任务级并发（1–8）+ 可选分片并发（1–16）；失败按重试预算处理，备用直链回退可在设置里关掉 |
-| 主题与主题色 | 浅色 / 深色即时切换；5 套预制主题色（樱花粉 / 天空蓝 / 薄荷绿 / 紫罗兰 / 琥珀橙），按钮 / 选中项 / 进度条 / 渐变全部跟着变 |
+| 主题与主题色 | 浅色 / 深色即时切换；4 套预制主题色（樱花粉 / 天空蓝 / 紫罗兰 / 琥珀橙），按钮 / 选中项 / 进度条 / 渐变全部跟着变 |
 | 设置持久化 | 改动即时写入 `settings.json`，没有「确定」按钮 |
 | 托盘常驻 | 设置 → 基础 →「关闭时」选「最小化到任务栏」后，点关闭**不会退出**：窗口隐藏、右下角托盘留图标，双击恢复、右键菜单可真正退出，后台下载继续跑 |
 
@@ -45,16 +45,16 @@
 
 | 项 | 选型 | 说明 |
 | --- | --- | --- |
-| 语言 / 框架 | C# + WPF（XAML + MVVM） | 目标框架 `net10.0`（Core）/ `net10.0-windows`（UI） |
+| 语言 / 框架 | C# + WPF（XAML + MVVM） | 目标框架 `net48`（Core + UI）；运行时由 Win10 1903+ / Win11 系统自带，安装包不含 .NET |
 | .NET SDK | 10.0.403 | 开发机自定义安装于 `E:\environment\NET\NET SDK10` |
 | MVVM | CommunityToolkit.Mvvm 8.4.2 | 源生成器，少样板代码 |
 | DI | Microsoft.Extensions.DependencyInjection | 在 `App.xaml.cs` 用 `ServiceCollection` 装配 |
 | 二维码 | QRCoder | 登录二维码渲染 |
-| HTTP | `HttpClient` 单例 + `SocketsHttpHandler` | `Referer=https://www.bilibili.com` + 浏览器 UA |
+| HTTP | `HttpClient` 单例 + `HttpClientHandler` | net48 没有 `SocketsHttpHandler`；连接回收改由 `ServicePointManager` 控制。`Referer=https://www.bilibili.com` + 浏览器 UA |
 | 合并 | 外部 FFmpeg | `Process` 调用，remux 成 MP4（不重新编码） |
 | 凭证存储 | Windows DPAPI | 登录态加密落盘 |
 | 测试 | xUnit + coverlet | 签名 / 解析 / 文件名 / 下载器（顺序 + 分片 + 续传）/ 编排 / 限速 / 同名策略 |
-| 打包 | Inno Setup（`.iss`） | `dotnet publish --self-contained` 后打成安装程序 |
+| 打包 | 自绘 WPF 安装器 | `scripts/build-installer.cmd` 一键产出 `dist\BiliDownloader-Setup-1.0.0.exe`（单个 exe，约 **29 MB**，内嵌主程序 + FFmpeg + 卸载器）。三个程序全部运行在 .NET Framework 4.8，不附带任何运行时；载荷构建时预压缩：主程序目录打成 zip，其余单文件用 Deflate |
 
 UI 层所有颜色都走 `Themes/Tokens.*.xaml` 的语义令牌、模板里全部 `DynamicResource`，所以换主题不需要重建界面。
 
@@ -118,7 +118,9 @@ B站视频下载工具/
 ├── src/
 │   ├── BiliDownloader.slnx          # 解决方案（.NET 10 的 slnx 格式）
 │   ├── Directory.Build.props        # 全局编译属性
-│   ├── BiliDownloader.UI/           # WPF 表现层 (net10.0-windows)
+│   ├── BiliDownloader.UI/           # WPF 表现层 (net48)
+│   │   ├── app.manifest             # PerMonitorV2 DPI 感知声明
+│   │   ├── App.config               # DPI 缩放开关 / TLS / 并发连接数上限
 │   │   ├── App.xaml(.cs)            # 入口：DI 装配、全局异常钩子
 │   │   ├── MainWindow.xaml(.cs)     # 主窗口：链接框 + 预览 + 任务列表
 │   │   ├── SettingsWindow.xaml(.cs) # 设置窗口：基础 / 下载 / 网络 / 外观 / 关于
@@ -139,8 +141,8 @@ B站视频下载工具/
 
 ## 环境要求
 
-- Windows 10 1809 及以上（推荐 Windows 11）
-- .NET 10 SDK
+- Windows 10 1903 及以上（推荐 Windows 11）。1903 起系统内置 .NET Framework 4.8；更早版本（含 LTSC 2019 / 1809）需要自行安装 4.8
+- .NET 10 SDK（**仅编译期需要**，产物运行在系统自带的 .NET Framework 4.8 上）
 - FFmpeg（LGPL 构建即可），放到 `tools/ffmpeg/ffmpeg.exe`；找不到时启动仍能正常运行，只是无法合并音视频
 
 > 仓库里的 `nuget.config` 把 NuGet 包目录重定向到 `E:\environment\NET\LocalStorage`，如果你的机器上没有这个目录，改掉 `nuget.config` 里的 `globalPackagesFolder` / `http_cache_directory`，或者直接删掉这两个配置项走系统默认缓存。
@@ -161,16 +163,17 @@ dotnet run --project src/BiliDownloader.UI/BiliDownloader.UI.csproj
 dotnet test src/BiliDownloader.slnx
 ```
 
-装了 .NET Desktop Runtime 的机器上可以直接跑产物：
+装了 .NET Framework 4.8（Win10 1903+ / Win11 自带）的机器上可以直接跑产物：
 
 ```
-src/BiliDownloader.UI/bin/Release/net10.0-windows/BiliDownloader.UI.exe
+src/BiliDownloader.UI/bin/Release/net48/BiliDownloader.UI.exe
 ```
 
 打包（用户机器上免装运行时）：
 
 ```bash
-dotnet publish src/BiliDownloader.UI/BiliDownloader.UI.csproj -c Release -r win-x64 --self-contained true -o ../publish
+# net48 没有 PublishSingleFile，产物是一个含十几个文件的目录，安装时整体解压
+dotnet publish src/BiliDownloader.UI/BiliDownloader.UI.csproj -c Release -o ../publish -p:DebugType=none
 ```
 
 ### 本机环境的几个坑
@@ -182,7 +185,7 @@ dotnet publish src/BiliDownloader.UI/BiliDownloader.UI.csproj -c Release -r win-
   export PATH="/e/environment/NET/NET SDK10:$PATH"
   ```
 
-- **双击 exe 报 `You must install .NET to run this application`**：SDK 装在自定义路径且没写注册表，apphost 找不到运行时。临时办法是带上上面的 `DOTNET_ROOT`；长期用 `setx DOTNET_ROOT "E:\environment\NET\NET SDK10"`（需重开终端）。**`--self-contained` 发布不受影响**，最终安装包走的就是这条路。
+- **`You must install .NET to run this application`（历史问题，已消失）**：这条只在自包含/框架依赖的 .NET Core 产物上出现过。迁到 net48 后产物由系统自带的 .NET Framework 4.8 运行，不再依赖 `DOTNET_ROOT`；`DOTNET_ROOT` 现在只影响**编译**。
 - **受限 shell（沙箱 / CI）缺环境变量**：`ProgramData` / `ProgramFiles` 为空会让 NuGet 还原抛 `Value cannot be null. (Parameter 'path1')`、apphost 报 `the default install location cannot be obtained`。补上即可：
 
   ```bash
@@ -203,6 +206,8 @@ BiliDownloader.UI.exe --shot=<输出目录> [--fake=<分P数>] [--fakep=<选第�
 ```
 
 `--fake` 会合成一份多 P 元数据直接塞给预览视图模型，**不联网**就能验证选集、画质下拉等布局；`--stack` 合成多 P 任务用于验证层叠卡背。输出目录里会额外生成 `report.txt`，包含窗口尺寸、各元素文案与像素直方图。
+
+`--shot-real` 走另一条路径：`PrintWindow` + DWM 合成抓**真实显示中的窗口**，能反映 ClearType 抗锯齿与 DPI 缩放，输出 `%TEMP%\bili_ui_real\real-window.png`。**验证 DPI 就靠它**——125% 缩放下 1040 DIP 应输出 1300 物理像素；如果仍是 1040，说明 `app.manifest` 的 PerMonitorV2 或 `App.config` 的 `DoNotScaleForDpiChanges` 没生效，窗口只是被位图拉伸。
 
 真实链路取证可使用 `--parse=<视频链接> --download --save-dir=<取证下载目录>`；`--save-dir` 只覆盖本次进程的下载位置，不保存到用户设置。附加 `--pause-resume` 验证暂停后继续，或附加 `--cancel` 验证中途取消。默认完成等待上限为 75 秒，必须检查报告中的最终状态，不能仅以进程退出认定成功。
 
@@ -247,7 +252,7 @@ dotnet build -c Release
 | `ExistingFileAction` | Rename | Rename 加 (1)(2) / Skip 跳过并记为「已跳过」 / Overwrite 覆盖，三种均已接入引擎 |
 | `CloseAction` | Exit | 点关闭的行为：Exit 直接退出；Minimize 隐藏窗口 + 托盘常驻 |
 | `Theme` | Light | Light / Dark |
-| `AccentColor` | Pink | 5 套预制主题色之一 |
+| `AccentColor` | Pink | 4 套预制主题色之一 |
 | `ProxyMode` | System | System / None / Manual，**重启程序后生效** |
 | `ProxyAddress` | 空 | Manual 模式下的代理地址，**重启程序后生效** |
 | `RequestTimeoutSeconds` | 30 | 请求超时（5–300 秒），**重启程序后生效** |

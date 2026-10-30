@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using BiliDownloader.Core.Utils;
 
 namespace BiliDownloader.Core.Download;
 
@@ -77,7 +78,7 @@ public sealed class TokenBucketSpeedLimiter : ISpeedLimiter
                 if (_bytesPerSecond <= 0) return;
                 RefillLocked();
                 if (_tokens >= 0) return;
-                waitMs = (int)Math.Clamp(Math.Ceiling(-_tokens * 1000.0 / _bytesPerSecond), 1, 100);
+                waitMs = (int)Net48.Clamp(Math.Ceiling(-_tokens * 1000.0 / _bytesPerSecond), 1, 100);
             }
             await Task.Delay(waitMs, ct).ConfigureAwait(false);
         }

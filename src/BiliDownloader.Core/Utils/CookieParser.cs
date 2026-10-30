@@ -42,7 +42,7 @@ public static class CookieParser
         if (queryIndex < 0) return null;
 
         var found = new List<string>();
-        foreach (var part in url[(queryIndex + 1)..].Split('&', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var part in url[(queryIndex + 1)..].Split(new[] { '&' }, StringSplitOptions.RemoveEmptyEntries))
         {
             var idx = part.IndexOf('=');
             if (idx <= 0) continue;
@@ -59,7 +59,7 @@ public static class CookieParser
     {
         if (string.IsNullOrWhiteSpace(cookie)) return "Cookie 不能为空";
 
-        var parts = cookie.Split(';', StringSplitOptions.RemoveEmptyEntries)
+        var parts = cookie.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
                           .Select(p => p.Trim())
                           .ToList();
 

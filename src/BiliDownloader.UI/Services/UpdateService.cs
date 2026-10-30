@@ -34,7 +34,8 @@ public sealed class UpdateService
 
             if (!response.IsSuccessStatusCode) return null;
 
-            await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            // net48 的 ReadAsStreamAsync 没有 CancellationToken 重载
+            using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
 
             var root = document.RootElement;

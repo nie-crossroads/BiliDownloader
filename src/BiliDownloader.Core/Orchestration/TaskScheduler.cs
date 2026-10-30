@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using BiliDownloader.Core.Download;
 using BiliDownloader.Core.Models;
+using BiliDownloader.Core.Utils;
 
 namespace BiliDownloader.Core.Orchestration;
 
@@ -19,7 +20,7 @@ internal sealed class TaskScheduler
     private readonly SemaphoreSlim _gate;
 
     public TaskScheduler(int maxConcurrency = 3) =>
-        _gate = new SemaphoreSlim(Math.Clamp(maxConcurrency, 1, 8));
+        _gate = new SemaphoreSlim(Net48.Clamp(maxConcurrency, 1, 8));
 
     public IEnumerable<TaskRuntime> All => _runtimes.Values;
 

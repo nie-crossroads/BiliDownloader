@@ -1,0 +1,21 @@
+<Window x:Class="BiliDownloader.Uninstaller.UninstallWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:BiliDownloader.Uninstaller.Views"
+        xmlns:sh="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        WindowStyle="None" AllowsTransparency="False"
+        Background="{DynamicResource Surface}"
+        ResizeMode="NoResize" SizeToContent="WidthAndHeight"
+        SnapsToDevicePixels="True" UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        Title="卸载 BiliDownloader"
+        FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI, Microsoft YaHei, system-ui">
+  <sh:WindowChrome.WindowChrome>
+    <sh:WindowChrome CaptionHeight="0" ResizeBorderThickness="0"
+                     GlassFrameThickness="0" CornerRadius="0"
+                     UseAeroCaptionButtons="False"/>
+  </sh:WindowChrome.WindowChrome>
+
+  <local:UninstallDialog/>
+</Window>

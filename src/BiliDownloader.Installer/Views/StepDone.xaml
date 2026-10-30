@@ -1,0 +1,32 @@
+<UserControl x:Class="BiliDownloader.Installer.Views.StepDone"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <StackPanel>
+    <Grid Margin="20,0,20,18" MinHeight="262">
+      <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+        <Border Width="52" Height="52" CornerRadius="99" Background="{DynamicResource OkSoft}" Margin="0,0,0,14">
+          <Path Data="M5 12.6 L9.4 17 L19 6.6" Stretch="None" Width="26" Height="26"
+                Stroke="{DynamicResource Ok}" StrokeThickness="2.2"
+                StrokeEndLineCap="Round" StrokeStartLineCap="Round" StrokeLineJoin="Round"
+                VerticalAlignment="Center" HorizontalAlignment="Center"/>
+        </Border>
+        <TextBlock Text="安装完成" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource Fg}"
+                   HorizontalAlignment="Center" TextAlignment="Center"/>
+        <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="{DynamicResource Fg3}"
+                   HorizontalAlignment="Center" TextAlignment="Center" Margin="0,2,0,18"
+                   MaxWidth="420" TextWrapping="Wrap"/>
+        <CheckBox Style="{StaticResource ChkBox}" Content="立即启动 BiliDownloader"
+                  IsChecked="{Binding LaunchAfter}" HorizontalAlignment="Center"/>
+      </StackPanel>
+    </Grid>
+
+    <Border Style="{StaticResource FootBorder}">
+      <DockPanel LastChildFill="False" VerticalAlignment="Center">
+        <Button DockPanel.Dock="Left" Style="{StaticResource BtnGhost}" Content="打开安装目录"
+                Command="{Binding OpenFolderCommand}"/>
+        <Button DockPanel.Dock="Right" Style="{StaticResource BtnPrimary}" Content="完成"
+                Command="{Binding FinishCommand}"/>
+      </DockPanel>
+    </Border>
+  </StackPanel>
+</UserControl>
