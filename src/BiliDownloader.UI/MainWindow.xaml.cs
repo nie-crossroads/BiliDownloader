@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using BiliDownloader.UI.Services;
@@ -11,6 +12,11 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
     private readonly IServiceProvider _services;
+    private readonly AppSettings _settings;
+    private readonly TrayIconService _tray;
+
+    /// <summary>置 true 后 Closing 不再拦截，用于托盘菜单里的真退出。</summary>
+    private bool _forceExit;
 
     public MainWindow(MainViewModel viewModel, IServiceProvider services)
     {
@@ -18,10 +24,17 @@ public partial class MainWindow : Window
 
         _viewModel = viewModel;
         _services = services;
+        _settings = services.GetRequiredService<AppSettings>();
         DataContext = viewModel;
+
+        _tray = new TrayIconService("BiliDownloader");
+        _tray.OpenRequested += RestoreFromTray;
+        _tray.ExitRequested += ExitFromTray;
 
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
+        Closing += OnWindowClosing;
+        Closed += (_, _) => _tray.Dispose();
     }
 
     private void OnSettingsClick(object sender, RoutedEventArgs e)
@@ -113,6 +126,40 @@ public partial class MainWindow : Window
         WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>
+    /// 所有关闭路径（标题栏 ×、Alt+F4、系统菜单）都在这里收口。
+    /// 设置里选了「最小化到任务栏」就取消关闭、改成隐藏窗口 + 亮托盘图标，下载继续跑；
+    /// 选「退出程序」才真关。以前这里压根没读 CloseAction，所以设置怎么选都是直接退出。
+    /// </summary>
+    private void OnWindowClosing(object? sender, CancelEventArgs e)
+    {
+        if (_forceExit) return;
+
+        // 取证模式必须能真的关掉窗口，否则脚本收尾时退不出去
+        if (DiagnosticsShot.IsRequested(Environment.GetCommandLineArgs())) return;
+
+        if (_settings.CloseAction is not "Minimize") return;
+
+        e.Cancel = true;
+        Hide();
+        _tray.Show();
+    }
+
+    private void RestoreFromTray()
+    {
+        _tray.Hide();
+        Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void ExitFromTray()
+    {
+        _forceExit = true;
+        _tray.Dispose();
+        Application.Current.Shutdown();
+    }
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);

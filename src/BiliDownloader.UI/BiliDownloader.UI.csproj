@@ -15,12 +15,22 @@
     <Resource Include="Resources\app-icon.png" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- UseWindowsForms 会把这两个命名空间灌进全局 using，和 WPF 的 Application / Brush / Color 撞名
+         （CS0104）。托盘只在 TrayIconService.cs 里用，那里显式 using 就够了，别污染整个项目。 -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!-- 只为拿到 System.Windows.Forms.NotifyIcon（任务栏托盘）：WPF 没有自带托盘控件，
+         纯 P/Invoke 手写要 150+ 行且菜单字体/DPI 细节难调。这里是框架内置开关，不加 NuGet 包。 -->
+    <UseWindowsForms>true</UseWindowsForms>
     <!-- exe / 任务栏 / Alt-Tab / 安装包用多尺寸 ico；图标由 tools/IconForge 生成，勿手改 -->
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
   </PropertyGroup>
