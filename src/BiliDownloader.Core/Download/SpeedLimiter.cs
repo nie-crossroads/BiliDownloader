@@ -26,7 +26,7 @@ public sealed class TokenBucketSpeedLimiter : ISpeedLimiter
 {
     private readonly object _sync = new();
     private long _bytesPerSecond;
-    private long _tokens;
+    private double _tokens;
     private long _lastTicks = Stopwatch.GetTimestamp();
 
     public TokenBucketSpeedLimiter(long bytesPerSecond = 0)
@@ -59,20 +59,28 @@ public sealed class TokenBucketSpeedLimiter : ISpeedLimiter
 
     public async Task ConsumeAsync(int bytes, CancellationToken ct = default)
     {
-        long waitMs;
-
         lock (_sync)
         {
             if (_bytesPerSecond <= 0 || bytes <= 0) return;
 
             RefillLocked();
             _tokens -= bytes;
-            waitMs = _tokens >= 0 ? 0 : (long)Math.Ceiling(-_tokens * 1000.0 / _bytesPerSecond);
         }
 
-        // 等待放在锁外：否则一条流限速会把其他流一起卡住。
-        if (waitMs <= 0) return;
-        await Task.Delay((int)Math.Min(waitMs, 2000), ct).ConfigureAwait(false);
+        // 分段等待直到欠账补齐，同时及时响应运行时修改速率与取消。
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            int waitMs;
+            lock (_sync)
+            {
+                if (_bytesPerSecond <= 0) return;
+                RefillLocked();
+                if (_tokens >= 0) return;
+                waitMs = (int)Math.Clamp(Math.Ceiling(-_tokens * 1000.0 / _bytesPerSecond), 1, 100);
+            }
+            await Task.Delay(waitMs, ct).ConfigureAwait(false);
+        }
     }
 
     private void RefillLocked()
@@ -82,6 +90,6 @@ public sealed class TokenBucketSpeedLimiter : ISpeedLimiter
         _lastTicks = now;
         if (elapsedMs <= 0) return;
 
-        _tokens = Math.Min(Capacity, _tokens + (long)(elapsedMs * _bytesPerSecond / 1000.0));
+        _tokens = Math.Min(Capacity, _tokens + elapsedMs * _bytesPerSecond / 1000.0);
     }
 }

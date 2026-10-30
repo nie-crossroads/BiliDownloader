@@ -311,13 +311,13 @@ public sealed class HttpFileDownloader : IFileDownloader
         var span = total - prefix;
         var count = (int)Math.Min(connections, Math.Max(1, (span + chunkSize - 1) / chunkSize));
 
-        // 计划没变（总长/片数/片大小一致，且前缀没倒退）就接着用，否则旧分片作废重下。
+        // 主文件已经增长说明拼接曾被打断；以连续前缀重新规划，避免重复追加旧分片。
         var existing = PartialFile.TryReadPlan(targetPath);
         var plan = existing is not null
                    && existing.Total == total
                    && existing.Count == count
                    && existing.ChunkSize == chunkSize
-                   && existing.Prefix <= prefix
+                   && existing.Prefix == prefix
             ? existing
             : CreatePlan(targetPath, prefix, total, count, chunkSize);
 
@@ -340,6 +340,7 @@ public sealed class HttpFileDownloader : IFileDownloader
 
         long completed = prefix + received.Sum();
         long attempts = 0;
+        var rangeIgnored = 0;
         var startedAt = Stopwatch.GetTimestamp();
 
         double AverageSpeed()
@@ -391,11 +392,6 @@ public sealed class HttpFileDownloader : IFileDownloader
 
                     if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
                     {
-                        if (offset > 0 && response.Content.Headers.ContentRange?.Length == from)
-                        {
-                            received[index] = length;
-                            break;
-                        }
                         if (TryAdvance()) continue;
                         throw BiliException.StreamExpired();
                     }
@@ -419,18 +415,15 @@ public sealed class HttpFileDownloader : IFileDownloader
 
                     if (response.StatusCode == HttpStatusCode.OK)
                     {
-                        // 服务端忽略 Range：整片重下
-                        var dropped = received[index];
-                        stream.SetLength(0);
-                        stream.Position = 0;
-                        received[index] = 0;
-                        Interlocked.Add(ref completed, -dropped);
+                        // 整个资源不能当作某一片写入，等其他连接退出后改走顺序下载。
+                        Interlocked.Exchange(ref rangeIgnored, 1);
+                        return;
                     }
                     else
                     {
                         var range = response.Content.Headers.ContentRange;
                         if (response.StatusCode != HttpStatusCode.PartialContent ||
-                            range?.From != from || range.To is null || range.To < from ||
+                            range?.From != from || range.To != to || range.Length != total ||
                             !string.Equals(range.Unit, "bytes", StringComparison.OrdinalIgnoreCase))
                             throw BiliException.StreamExpired();
                     }
@@ -442,6 +435,8 @@ public sealed class HttpFileDownloader : IFileDownloader
 
                     while ((read = await body.ReadAsync(buffer, token).ConfigureAwait(false)) > 0)
                     {
+                        if (read > length - received[index])
+                            throw BiliException.StreamExpired();
                         await stream.WriteAsync(buffer.AsMemory(0, read), token).ConfigureAwait(false);
                         received[index] += read;
                         writtenHere += read;
@@ -487,6 +482,13 @@ public sealed class HttpFileDownloader : IFileDownloader
             await Parallel.ForEachAsync(pending,
                 new ParallelOptions { MaxDegreeOfParallelism = Math.Min(connections, pending.Length), CancellationToken = ct },
                 async (index, token) => await DownloadPartAsync(index, token).ConfigureAwait(false)).ConfigureAwait(false);
+        }
+
+        if (rangeIgnored != 0)
+        {
+            PartialFile.Cleanup(targetPath);
+            return await DownloadSequentialAsync(urls, targetPath, options, total, progress, ct)
+                .ConfigureAwait(false);
         }
 
         for (var i = 0; i < plan.Count; i++)

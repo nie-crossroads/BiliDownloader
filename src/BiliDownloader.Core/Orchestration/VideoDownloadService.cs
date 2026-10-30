@@ -230,7 +230,7 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
             RequestStop(rt);
         }
 
-        RemoveManifestEntry(rt.Task);
+        lock (_manifestSync) RemoveManifestEntry(rt.Task);
     }
 
     /// <summary>请求停止。CTS 可能已被 Restart 换掉并释放，这里不能让它冒出去。</summary>
@@ -339,7 +339,7 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
             foreach (var page in task.Pages)
             {
                 ct.ThrowIfCancellationRequested();
-                if (page.Status == DownloadStatus.Completed) continue;
+                if (page.Status is DownloadStatus.Completed or DownloadStatus.Skipped) continue;
 
                 var pageInfo = info.Pages.FirstOrDefault(p => p.Cid == page.Cid);
                 try
@@ -699,9 +699,9 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
             ? null
             : await _downloader.ProbeFingerprintAsync(RemoteOf(audio), ct).ConfigureAwait(false);
 
-        var changed =
-            (page.VideoFingerprint is { } previousVideo && !previousVideo.Matches(videoCurrent))
-            || (page.AudioFingerprint is { } previousAudio && !previousAudio.Matches(audioCurrent));
+        var changed = page.VideoFingerprint?.Matches(videoCurrent) != true
+            || (audio is not null && page.AudioFingerprint?.Matches(audioCurrent) != true)
+            || (audio is null && page.AudioFingerprint is not null);
 
         if (changed && !string.IsNullOrEmpty(page.TempDir))
         {
@@ -711,8 +711,8 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
             Directory.CreateDirectory(page.TempDir);
         }
 
-        page.VideoFingerprint = videoCurrent ?? page.VideoFingerprint;
-        page.AudioFingerprint = audioCurrent ?? page.AudioFingerprint;
+        page.VideoFingerprint = videoCurrent;
+        page.AudioFingerprint = audioCurrent;
     }
 
     private static RemoteFile RemoteOf(DashStream stream) =>
@@ -728,6 +728,10 @@ public sealed class VideoDownloadService : IVideoDownloadService, IDisposable
     {
         lock (_manifestSync)
         {
+            // 移除后，旧流程迟到的进度或错误不能重新创建清单条目。
+            if (!_scheduler.TryGet(rt.Task.TaskId, out var registered) || !ReferenceEquals(rt, registered))
+                return;
+
             if (rt.Task.Status is DownloadStatus.Completed or DownloadStatus.Canceled or DownloadStatus.Skipped)
             {
                 RemoveManifestEntry(rt.Task);

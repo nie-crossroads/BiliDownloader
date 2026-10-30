@@ -44,6 +44,26 @@ public sealed class EngineOptionsTests : IDisposable
         AssertRate(new TokenBucketSpeedLimiter(1000), 1000);
 
     [Fact]
+    public async Task SpeedLimiter_LowRate_WaitsForFullBudget()
+    {
+        var limiter = new TokenBucketSpeedLimiter(1000);
+        var clock = Stopwatch.StartNew();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await limiter.ConsumeAsync(4000, timeout.Token);
+        Assert.True(clock.ElapsedMilliseconds >= 2800,
+            $"低速限速被截断，只等了 {clock.ElapsedMilliseconds} ms");
+    }
+
+    [Fact]
+    public async Task SpeedLimiter_DisablingLimit_ReleasesExistingWait()
+    {
+        var limiter = new TokenBucketSpeedLimiter(1);
+        var waiting = limiter.ConsumeAsync(65536);
+        limiter.Update(0);
+        await waiting.WaitAsync(TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
     public void SpeedLimiter_NegativeRate_ClampsToUnlimited() =>
         AssertRate(new TokenBucketSpeedLimiter(-5), 0);
 

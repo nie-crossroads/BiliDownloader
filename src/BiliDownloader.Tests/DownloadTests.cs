@@ -176,6 +176,47 @@ public sealed class DownloadTests : IDisposable
     // ---------------------------------------------------------------- 备用节点回退开关
 
     [Fact]
+    public async Task ChunkedDownload_RangeIgnored_FallsBackToWholeFile()
+    {
+        using var http = Client(_ => new(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(Sequence(100))
+        });
+        await new HttpFileDownloader(http).DownloadAsync(Remote(100), Target,
+            new(ChunkSizeBytes: 25, Connections: 4));
+        Assert.Equal(Sequence(100), await File.ReadAllBytesAsync(Target));
+        Assert.False(File.Exists(PartialFile.PlanPath(Target)));
+    }
+
+    [Theory]
+    [InlineData(10)]
+    [InlineData(25)]
+    public async Task ChunkedDownload_InterruptedConcatenation_ResumesWithoutDuplicateBytes(int prefix)
+    {
+        Directory.CreateDirectory(_directory);
+        PartialFile.WritePlan(Target, new ChunkPlan(0, 100, 4, 25));
+        await File.WriteAllBytesAsync(Target, Sequence(prefix));
+        for (var i = 0; i < 4; i++)
+            await File.WriteAllBytesAsync(PartialFile.PartPath(Target, i),
+                Enumerable.Range(i * 25, 25).Select(n => (byte)n).ToArray());
+
+        using var http = RangeClient(100);
+        await new HttpFileDownloader(http).DownloadAsync(Remote(100), Target,
+            new(ChunkSizeBytes: 25, Connections: 4));
+        Assert.Equal(Sequence(100), await File.ReadAllBytesAsync(Target));
+    }
+
+    [Fact]
+    public async Task ChunkedDownload_WrongResourceLength_DoesNotWriteParts()
+    {
+        using var http = RangeClient(120);
+        await Assert.ThrowsAsync<BiliException>(() => new HttpFileDownloader(http)
+            .DownloadAsync(Remote(100), Target, new(ChunkSizeBytes: 25, Connections: 4)));
+        Assert.All(Directory.GetFiles(_directory, "*.part*"),
+            path => Assert.Equal(0, new FileInfo(path).Length));
+    }
+
+    [Fact]
     public async Task AllowFallbackDisabled_DoesNotSwitchToBackupUrl()
     {
         var calls = 0;

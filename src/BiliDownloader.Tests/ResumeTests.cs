@@ -247,6 +247,64 @@ public sealed class ResumeTests : IDisposable
 
     // ---------------------------------------------------------------- 辅助
 
+    [Fact]
+    public async Task MissingPreviousFingerprint_DiscardsExistingBytes()
+    {
+        Seed("task-no-fingerprint", null, bytesOnDisk: 2);
+        using var http = new HttpClient();
+        var downloader = new ProbeDownloader { Fingerprint = new("\"new\"", null, 4) };
+        using var service = Create(downloader, http);
+        var task = Assert.Single(service.LoadResumable(_root));
+        service.Resume(task.TaskId);
+        await WaitAsync(service, task);
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+        Assert.Equal([0L], downloader.StartLengths);
+    }
+
+    [Fact]
+    public async Task RemovedTask_LateFailure_DoesNotReappearInManifest()
+    {
+        Seed("task-remove", new("\"same\"", null, 4), bytesOnDisk: 2);
+        using var http = new HttpClient();
+        var downloader = new ProbeDownloader { Fingerprint = new("\"same\"", null, 4) };
+        using var service = Create(downloader, http);
+        var task = Assert.Single(service.LoadResumable(_root));
+        var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.StateChanged += (_, e) =>
+        {
+            if (e.Current == DownloadStatus.Failed) failed.TrySetResult();
+        };
+        downloader.BeforeDownload = () =>
+        {
+            service.Remove(task.TaskId);
+            throw new IOException("late failure");
+        };
+        service.Resume(task.TaskId);
+        await failed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Empty(ManifestStore.Load(_root).Tasks);
+    }
+
+    [Fact]
+    public async Task RestoreMixedTask_DoesNotDownloadSkippedPageAgain()
+    {
+        Seed("task-mixed", new("\"same\"", null, 4), bytesOnDisk: 2);
+        var manifest = ManifestStore.Load(_root);
+        var entry = manifest.Tasks[0];
+        manifest.Tasks[0] = entry with
+        {
+            Pages = [entry.Pages[0] with { Cid = 2, Status = nameof(DownloadStatus.Skipped) }, entry.Pages[0]]
+        };
+        ManifestStore.Save(_root, manifest);
+        using var http = new HttpClient();
+        var downloader = new ProbeDownloader { Fingerprint = new("\"same\"", null, 4) };
+        using var service = Create(downloader, http);
+        var task = Assert.Single(service.LoadResumable(_root));
+        service.Resume(task.TaskId);
+        await WaitAsync(service, task);
+        Assert.Equal(DownloadStatus.Skipped, task.Pages[0].Status);
+        Assert.Single(downloader.StartLengths);
+    }
+
     /// <summary>伪造「上次程序关掉时」的状态：临时目录里有半个文件，清单里有记录。</summary>
     private void Seed(string taskId, StreamFingerprint? videoFingerprint, int bytesOnDisk,
         string status = nameof(DownloadStatus.Paused))
@@ -308,6 +366,7 @@ public sealed class ResumeTests : IDisposable
     {
         public ConcurrentBag<long> StartLengths { get; } = [];
         public StreamFingerprint? Fingerprint { get; set; }
+        public Action? BeforeDownload { get; set; }
 
         public Task<long?> ProbeLengthAsync(RemoteFile file, CancellationToken ct = default) =>
             Task.FromResult<long?>(Fingerprint?.Length ?? 4);
@@ -318,6 +377,7 @@ public sealed class ResumeTests : IDisposable
         public async Task<DownloadResult> DownloadAsync(RemoteFile file, string targetPath, DownloadOptions options,
             IProgress<DownloadProgress>? progress = null, CancellationToken ct = default)
         {
+            BeforeDownload?.Invoke();
             StartLengths.Add(File.Exists(targetPath) ? new FileInfo(targetPath).Length : 0);
             await File.WriteAllBytesAsync(targetPath, [1, 2, 3, 4], ct);
             return new(4, false, 1);
